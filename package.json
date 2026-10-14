@@ -1,0 +1,27 @@
+{
+  "name": "college-ps-portal",
+  "version": "1.0.0",
+  "description": "College Programming Assessment Portal - Complete Self-Hostable Examination Platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "execution-worker",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:worker": "npm --prefix execution-worker run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently -n \"worker,backend,frontend\" -c \"magenta,cyan,green\" \"npm run dev:worker\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:worker": "npm --prefix execution-worker run build",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "npm run build:worker && npm run build:backend && npm run build:frontend",
+    "seed": "npm --prefix backend run seed",
+    "test": "npm --prefix backend test && npm --prefix execution-worker test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+

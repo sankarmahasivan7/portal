@@ -1,0 +1,30 @@
+FROM node:20-bookworm-slim
+
+# Install C/C++ GCC, G++, OpenJDK 17, Python 3, and build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    openjdk-17-jdk-headless \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package*.json ./
+COPY execution-worker/package*.json ./execution-worker/
+RUN npm install
+
+COPY execution-worker ./execution-worker
+RUN npm --prefix execution-worker run build
+
+ENV NODE_ENV=production
+ENV GCC_PATH=gcc
+ENV GPP_PATH=g++
+ENV PYTHON_PATH=python3
+ENV JAVAC_PATH=javac
+ENV JAVA_PATH=java
+ENV PORT=5050
+
+EXPOSE 5050
+CMD ["node", "execution-worker/dist/index.js"]
+

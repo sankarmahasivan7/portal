@@ -1,0 +1,175 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { Navbar } from './components/common/Navbar';
+
+// Auth Pages
+import { Login } from './pages/auth/Login';
+import { Register } from './pages/auth/Register';
+
+// Student Pages
+import { StudentDashboard } from './pages/student/StudentDashboard';
+import { ExamSchedule } from './pages/student/ExamSchedule';
+import { ExamArena } from './pages/student/ExamArena';
+import { ExamResultView } from './pages/student/ExamResultView';
+
+// Admin Pages
+import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { StudentManagement } from './pages/admin/StudentManagement';
+import { LanguageManagement } from './pages/admin/LanguageManagement';
+import { QuestionBank } from './pages/admin/QuestionBank';
+import { ExamManagement } from './pages/admin/ExamManagement';
+import { ResultsReporting } from './pages/admin/ResultsReporting';
+import { SecurityAudit } from './pages/admin/SecurityAudit';
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> = ({
+  children,
+  roles
+}) => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-teal-400">
+        <div className="w-10 h-10 border-4 border-teal-500/20 border-t-teal-400 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (roles && !roles.includes(user.role)) {
+    return <Navigate to={user.role === 'student' ? '/student/dashboard' : '/admin/overview'} replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Layout wrapper to hide standard Navbar inside ExamArena full-screen room
+const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  const isExamRoom = location.pathname.startsWith('/exam/') && !location.pathname.startsWith('/exam/result');
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {!isExamRoom && <Navbar />}
+      <main className="flex-1">{children}</main>
+    </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <MainLayout>
+          <Routes>
+            {/* Public Auth */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+
+            {/* Student Routes */}
+            <Route
+              path="/student/dashboard"
+              element={
+                <ProtectedRoute roles={['student']}>
+                  <StudentDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student/schedule"
+              element={
+                <ProtectedRoute roles={['student']}>
+                  <ExamSchedule />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/exam/:examId"
+              element={
+                <ProtectedRoute roles={['student', 'admin', 'faculty']}>
+                  <ExamArena />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/exam/result/:sessionId"
+              element={
+                <ProtectedRoute roles={['student', 'admin', 'faculty']}>
+                  <ExamResultView />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Admin / Faculty Routes */}
+            <Route
+              path="/admin/overview"
+              element={
+                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/students"
+              element={
+                <ProtectedRoute roles={['admin', 'controller']}>
+                  <StudentManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/languages"
+              element={
+                <ProtectedRoute roles={['admin', 'faculty']}>
+                  <LanguageManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/questions"
+              element={
+                <ProtectedRoute roles={['admin', 'faculty']}>
+                  <QuestionBank />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/exams"
+              element={
+                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
+                  <ExamManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/results"
+              element={
+                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
+                  <ResultsReporting />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/security"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <SecurityAudit />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </MainLayout>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+};
+
+export default App;
+

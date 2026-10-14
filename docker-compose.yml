@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: college-assessment-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=college_assessment_db
+
+  execution-worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: college-assessment-worker
+    restart: unless-stopped
+    # Do not expose execution worker to the public internet
+    expose:
+      - "5050"
+    environment:
+      - PORT=5050
+      - NODE_ENV=production
+      - WORKER_SECRET=isolated_worker_internal_secret_998877
+      - GCC_PATH=gcc
+      - GPP_PATH=g++
+      - PYTHON_PATH=python3
+      - JAVAC_PATH=javac
+      - JAVA_PATH=java
+
+  backend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.backend
+    container_name: college-assessment-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/college_assessment_db
+      - JWT_SECRET=college_ps_portal_super_secure_jwt_secret_change_in_prod
+      - EXECUTION_WORKER_URL=http://execution-worker:5050
+      - EXECUTION_WORKER_SECRET=isolated_worker_internal_secret_998877
+      - DEFAULT_TIMEZONE=Asia/Kolkata
+      - SEB_QUIT_PASSWORD=CollegeExamSEBQuitPass2026
+    depends_on:
+      - mongo
+      - execution-worker
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.frontend
+    container_name: college-assessment-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+    driver: local
+

@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const studentController_1 = require("../controllers/studentController");
+const auth_1 = require("../middleware/auth");
+const ipCheck_1 = require("../middleware/ipCheck");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.use(ipCheck_1.checkCollegeNetwork);
+router.get('/dashboard', (0, auth_1.requireRole)(['student']), studentController_1.getStudentDashboard);
+router.get('/notifications', studentController_1.getNotifications);
+router.patch('/notifications/:id/read', studentController_1.markNotificationRead);
+exports.default = router;
