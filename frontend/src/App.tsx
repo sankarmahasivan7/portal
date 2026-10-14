@@ -8,6 +8,9 @@ import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 
 // Student Pages
+import { TotalCourses } from './pages/student/TotalCourses';
+import { MyCourses } from './pages/student/MyCourses';
+import { LevelDetailPage } from './pages/student/LevelDetailPage';
 import { StudentDashboard } from './pages/student/StudentDashboard';
 import { ExamSchedule } from './pages/student/ExamSchedule';
 import { ExamArena } from './pages/student/ExamArena';
@@ -30,8 +33,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> 
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-teal-400">
-        <div className="w-10 h-10 border-4 border-teal-500/20 border-t-teal-400 rounded-full animate-spin" />
+      <div className="min-h-screen bg-white flex items-center justify-center text-teal-600">
+        <div className="w-10 h-10 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -41,7 +44,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> 
   }
 
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'student' ? '/student/dashboard' : '/admin/overview'} replace />;
+    return <Navigate to={user.role === 'student' ? '/student/total-courses' : '/admin/overview'} replace />;
   }
 
   return <>{children}</>;
@@ -53,7 +56,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isExamRoom = location.pathname.startsWith('/exam/') && !location.pathname.startsWith('/exam/result');
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {!isExamRoom && <Navbar />}
       <main className="flex-1">{children}</main>
     </div>
@@ -71,6 +74,30 @@ export const App: React.FC = () => {
             <Route path="/register" element={<Register />} />
 
             {/* Student Routes */}
+            <Route
+              path="/student/total-courses"
+              element={
+                <ProtectedRoute roles={['student']}>
+                  <TotalCourses />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student/my-courses"
+              element={
+                <ProtectedRoute roles={['student']}>
+                  <MyCourses />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student/course/:languageId/level/:levelNumber"
+              element={
+                <ProtectedRoute roles={['student']}>
+                  <LevelDetailPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/student/dashboard"
               element={
@@ -162,7 +189,7 @@ export const App: React.FC = () => {
               }
             />
 
-            {/* Fallback */}
+            {/* Default Fallback */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </MainLayout>
@@ -172,4 +199,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-
