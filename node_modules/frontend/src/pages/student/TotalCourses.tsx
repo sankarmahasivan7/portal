@@ -29,6 +29,8 @@ interface CourseItem {
   slug: string;
   totalLevels: number;
   completedLevels: number;
+  isEnrolled: boolean;
+  enrolledLevels: number[];
   highestUnlockedLevel: number;
   levels: LevelInfo[];
 }
@@ -97,7 +99,7 @@ export const TotalCourses: React.FC = () => {
               Total Courses & Levels
             </h1>
             <p className="text-slate-500 mt-1 max-w-2xl text-sm sm:text-base">
-              Explore all language tracks. View exactly how many levels you have completed in each course and click any level to watch video lectures and register for assessments.
+              Explore all language tracks. Click any course (e.g. C Course) to view its levels one by one, topics covered, attempt history, and register for courses.
             </p>
           </div>
 
@@ -150,9 +152,9 @@ export const TotalCourses: React.FC = () => {
         {/* Courses Grid */}
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
-            <span>All Courses & Your Completed Levels</span>
+            <span>All Courses & Curriculum Tracks</span>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-              {courses.length} tracks
+              Click a course to view levels & topics
             </span>
           </h2>
 
@@ -163,19 +165,29 @@ export const TotalCourses: React.FC = () => {
               return (
                 <div
                   key={course.languageId}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden"
+                  className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden cursor-pointer group"
+                  onClick={() => navigate(`/student/course-overview/${course.slug}`)}
                 >
                   <div className="p-6 space-y-5">
                     {/* Course Header */}
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500/10 to-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-700 font-extrabold text-lg uppercase">
+                      <div className="flex items-center space-x-3.5">
+                        <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700 font-extrabold text-xl uppercase group-hover:scale-105 transition-transform shadow-xs">
                           {course.slug.slice(0, 2)}
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">{course.languageName}</h3>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="text-xl font-extrabold text-slate-900 group-hover:text-teal-600 transition">
+                              {course.languageName}
+                            </h3>
+                            {course.isEnrolled && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                                Enrolled
+                              </span>
+                            )}
+                          </div>
                           <span className="text-xs text-slate-500 font-medium">
-                            {course.totalLevels} sequential curriculum tiers
+                            {course.totalLevels} levels • Click to view topics & register
                           </span>
                         </div>
                       </div>
@@ -201,62 +213,51 @@ export const TotalCourses: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Levels Chips List */}
-                    <div className="space-y-2 pt-2">
+                    {/* Levels Preview Chips */}
+                    <div className="space-y-2 pt-1">
                       <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                        Levels & Status (Click to open lecture videos & register)
+                        Curriculum Levels ({course.totalLevels})
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         {course.levels.map((lvl) => {
                           const isPassed = lvl.status === 'Passed';
                           const isRegistered = lvl.status === 'Registered';
                           const isAvailable = lvl.status === 'Available';
-                          const isLocked = lvl.status === 'Locked';
-
-                          let badgeStyle = 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300';
-                          if (isPassed) badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100';
-                          else if (isRegistered) badgeStyle = 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
-                          else if (isAvailable) badgeStyle = 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100';
-                          else if (isLocked) badgeStyle = 'bg-slate-50 text-slate-400 border-slate-200 opacity-70';
 
                           return (
-                            <button
+                            <div
                               key={lvl.levelNumber}
-                              onClick={() =>
-                                navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`)
-                              }
-                              className={`p-2 rounded-xl border text-left text-xs font-medium transition flex items-center justify-between ${badgeStyle}`}
-                              title={isLocked ? lvl.lockReason || 'Locked' : `Level ${lvl.levelNumber}`}
+                              className={`p-2 rounded-xl border text-center text-xs font-bold transition flex items-center justify-center space-x-1 ${
+                                isPassed
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : isRegistered
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : isAvailable
+                                  ? 'bg-teal-50 text-teal-700 border-teal-200'
+                                  : 'bg-slate-50 text-slate-400 border-slate-200'
+                              }`}
                             >
-                              <div className="flex items-center space-x-1.5 truncate">
-                                {isPassed && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                                {isRegistered && <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
-                                {isAvailable && <Unlock className="w-3.5 h-3.5 text-teal-600 shrink-0" />}
-                                {isLocked && <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                                <span className="truncate">Lvl {lvl.levelNumber}</span>
-                              </div>
-                              <span className="text-[10px] uppercase font-bold shrink-0 ml-1">
-                                {isPassed ? 'Passed' : isRegistered ? 'Booked' : isAvailable ? 'Open' : 'Lock'}
-                              </span>
-                            </button>
+                              <span>Level {lvl.levelNumber}</span>
+                            </div>
                           );
                         })}
                       </div>
                     </div>
                   </div>
 
-                  {/* Card Footer */}
-                  <div className="bg-slate-50 px-6 py-3.5 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-xs text-slate-500 font-medium">
-                      Highest Unlocked: <strong className="text-slate-800">Level {course.highestUnlockedLevel}</strong>
+                  {/* Card Footer: Clear action to open Course Overview */}
+                  <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-slate-600 font-semibold">
+                      View all levels, topics & register
                     </span>
                     <button
-                      onClick={() =>
-                        navigate(`/student/course/${course.slug}/level/${course.highestUnlockedLevel}`)
-                      }
-                      className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center space-x-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/student/course-overview/${course.slug}`);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs flex items-center space-x-1.5"
                     >
-                      <span>Explore Next Level</span>
+                      <span>Explore Levels & Register</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -270,4 +271,3 @@ export const TotalCourses: React.FC = () => {
   );
 };
 export default TotalCourses;
-

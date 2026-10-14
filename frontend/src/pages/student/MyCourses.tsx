@@ -94,7 +94,7 @@ export const MyCourses: React.FC = () => {
       <div className="min-h-[80vh] flex items-center justify-center bg-white">
         <div className="flex flex-col items-center space-y-3">
           <div className="w-10 h-10 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
-          <span className="text-slate-500 text-sm font-medium">Loading your enrolled courses & exam bookings...</span>
+          <span className="text-slate-500 text-sm font-medium">Loading your registered courses & exam bookings...</span>
         </div>
       </div>
     );
@@ -119,13 +119,13 @@ export const MyCourses: React.FC = () => {
           <div>
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold uppercase tracking-wider mb-3">
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Student Learning & Assessment Hub</span>
+              <span>Registered Courses & Slot Bookings</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               My Courses
             </h1>
             <p className="text-slate-500 mt-1 max-w-2xl text-sm sm:text-base">
-              Manage your active learning tracks. Click on any course level (e.g. C Level 1) to watch lectures and select your examination slot.
+              Manage your registered course levels. Click any registered level to watch preparatory videos, select an examination slot, and take the assessment.
             </p>
           </div>
 
@@ -141,7 +141,7 @@ export const MyCourses: React.FC = () => {
               <div className="text-sm font-semibold text-slate-900">
                 Currently Registered for{' '}
                 <span className="text-teal-700 font-bold">
-                  {currentlyRegisteredCount} {currentlyRegisteredCount === 1 ? 'Course Exam' : 'Course Exams'}
+                  {currentlyRegisteredCount} {currentlyRegisteredCount === 1 ? 'Exam Slot' : 'Exam Slots'}
                 </span>
               </div>
             </div>
@@ -158,13 +158,6 @@ export const MyCourses: React.FC = () => {
                 {registeredExams.length} active
               </span>
             </h2>
-            <Link
-              to="/student/total-courses"
-              className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center space-x-1"
-            >
-              <span>Explore All Courses</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
           </div>
 
           {registeredExams.length === 0 ? (
@@ -174,7 +167,7 @@ export const MyCourses: React.FC = () => {
               </div>
               <h3 className="text-base font-bold text-slate-800">No Current Exam Registrations</h3>
               <p className="text-sm text-slate-500 max-w-md mx-auto">
-                You are not registered for any upcoming examination. Select one of your unlocked course levels below to watch course videos and pick your preferred time slot!
+                You do not have any active exam slot bookings. Click on one of your registered levels below to select a time slot and take your test!
               </p>
             </div>
           ) : (
@@ -246,16 +239,16 @@ export const MyCourses: React.FC = () => {
           )}
         </div>
 
-        {/* Section 2: Enrolled Courses & Levels */}
+        {/* Section 2: Registered Courses & Levels */}
         <div className="space-y-6 pt-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
                 <BookOpen className="w-5 h-5 text-teal-600" />
-                <span>My Course Progression & Levels</span>
+                <span>My Registered Courses & Levels</span>
               </h2>
               <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-                Click on any level (e.g. C Level 1) to access comprehensive video lectures and book your preferred examination slot.
+                Click any registered level to view video lectures and select your examination slot.
               </p>
             </div>
 
@@ -263,133 +256,146 @@ export const MyCourses: React.FC = () => {
               to="/student/total-courses"
               className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition shadow-sm flex items-center space-x-1.5"
             >
-              <span>View Total Courses</span>
+              <span>Explore Total Courses</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          <div className="space-y-6">
-            {courses.map((course) => (
-              <div
-                key={course.languageId}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
-              >
-                {/* Course Bar */}
-                <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center space-x-3.5">
-                    <div className="w-12 h-12 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center font-extrabold text-teal-700 text-base uppercase">
-                      {course.slug.slice(0, 2)}
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900">{course.languageName}</h3>
-                      <div className="text-xs text-slate-500 flex items-center space-x-3 mt-0.5">
-                        <span>Total Levels: <strong>{course.totalLevels}</strong></span>
-                        <span>•</span>
-                        <span>Completed: <strong className="text-emerald-600">{course.completedLevels}</strong></span>
-                        <span>•</span>
-                        <span>Highest Unlocked: <strong className="text-teal-700">Level {course.highestUnlockedLevel}</strong></span>
+          {courses.length === 0 ? (
+            /* Empty state when student hasn't registered for any course yet */
+            <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center space-y-4 shadow-sm">
+              <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-200 text-teal-600 mx-auto flex items-center justify-center">
+                <BookOpen className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-bold text-slate-900">No Courses Registered Yet</h3>
+                <p className="text-sm text-slate-500 max-w-md mx-auto">
+                  To view and take assessments, browse the curriculum tracks in <strong>Total Courses</strong>, view topics and attempts for each level, and click <strong>Register</strong>!
+                </p>
+              </div>
+              <div className="pt-2">
+                <Link
+                  to="/student/total-courses"
+                  className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition"
+                >
+                  <span>Browse Total Courses</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {courses.map((course) => (
+                <div
+                  key={course.languageId}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+                >
+                  {/* Course Header Bar */}
+                  <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-12 h-12 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center font-extrabold text-teal-700 text-base uppercase">
+                        {course.slug.slice(0, 2)}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">{course.languageName}</h3>
+                        <div className="text-xs text-slate-500 flex items-center space-x-3 mt-0.5">
+                          <span>Registered Levels: <strong className="text-teal-700">{course.levels.length}</strong></span>
+                          <span>•</span>
+                          <span>Completed: <strong className="text-emerald-600">{course.completedLevels}</strong></span>
+                        </div>
                       </div>
                     </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Link
+                        to={`/student/course-overview/${course.slug}`}
+                        className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center space-x-1"
+                      >
+                        <span>View All Topics & Attempts</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                      Progress: {Math.round((course.completedLevels / course.totalLevels) * 100)}%
-                    </span>
-                  </div>
-                </div>
+                  {/* Registered Levels Grid */}
+                  <div className="p-5 sm:p-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {course.levels.map((lvl) => {
+                        const isPassed = lvl.status === 'Passed';
+                        const isRegistered = lvl.status === 'Registered';
 
-                {/* Levels Grid */}
-                <div className="p-5 sm:p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {course.levels.map((lvl) => {
-                      const isPassed = lvl.status === 'Passed';
-                      const isRegistered = lvl.status === 'Registered';
-                      const isAvailable = lvl.status === 'Available';
-                      const isLocked = lvl.status === 'Locked';
+                        return (
+                          <div
+                            key={lvl.levelNumber}
+                            onClick={() =>
+                              navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`)
+                            }
+                            className={`rounded-2xl p-4 border transition-all cursor-pointer flex flex-col justify-between space-y-3 group ${
+                              isPassed
+                                ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
+                                : isRegistered
+                                ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
+                                : 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                  {course.languageName}
+                                </span>
+                                <h4 className="text-base font-bold text-slate-900 group-hover:text-teal-600 transition">
+                                  Level {lvl.levelNumber}
+                                </h4>
+                              </div>
 
-                      return (
-                        <div
-                          key={lvl.levelNumber}
-                          onClick={() =>
-                            navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`)
-                          }
-                          className={`rounded-2xl p-4 border transition-all cursor-pointer flex flex-col justify-between space-y-3 group ${
-                            isPassed
-                              ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
-                              : isRegistered
-                              ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
-                              : isAvailable
-                              ? 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm'
-                              : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                {course.languageName}
-                              </span>
-                              <h4 className="text-base font-bold text-slate-900 group-hover:text-teal-600 transition">
-                                Level {lvl.levelNumber}
-                              </h4>
+                              {/* Badge */}
+                              {isPassed && (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Passed</span>
+                                </span>
+                              )}
+                              {isRegistered && (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>Slot Booked</span>
+                                </span>
+                              )}
+                              {!isPassed && !isRegistered && (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-800 border border-teal-200">
+                                  <Unlock className="w-3.5 h-3.5" />
+                                  <span>Registered</span>
+                                </span>
+                              )}
                             </div>
 
-                            {/* Badge */}
-                            {isPassed && (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Passed</span>
-                              </span>
-                            )}
-                            {isRegistered && (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                                <Clock className="w-3.5 h-3.5" />
-                                <span>Registered</span>
-                              </span>
-                            )}
-                            {isAvailable && (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-800 border border-teal-200">
-                                <Unlock className="w-3.5 h-3.5" />
-                                <span>Eligible</span>
-                              </span>
-                            )}
-                            {isLocked && (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-600 border border-slate-300">
-                                <Lock className="w-3.5 h-3.5" />
-                                <span>Locked</span>
-                              </span>
-                            )}
-                          </div>
+                            <p className="text-xs text-slate-500 line-clamp-2">
+                              {isPassed
+                                ? `Completed successfully with ${lvl.scorePercentage || 100}%. Certificate eligible.`
+                                : isRegistered
+                                ? 'Slot booked! Click to view lecture notes or enter the assessment room.'
+                                : 'Registered level! Click to watch course videos and select your preferred examination slot.'}
+                            </p>
 
-                          <p className="text-xs text-slate-500 line-clamp-2">
-                            {isPassed
-                              ? `Completed successfully with ${lvl.scorePercentage || 100}%. Certificate eligible.`
-                              : isRegistered
-                              ? 'Slot booked! Click to view lecture notes or enter the assessment room.'
-                              : isAvailable
-                              ? 'Ready for assessment. Watch preparatory video tutorials and select your preferred slot.'
-                              : lvl.lockReason || `Prerequisite: Complete Level ${lvl.levelNumber - 1} first.`}
-                          </p>
-
-                          <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-semibold text-teal-700 group-hover:translate-x-0.5 transition-transform">
-                            <span className="flex items-center space-x-1">
-                              <PlayCircle className="w-3.5 h-3.5" />
-                              <span>Course Videos & Register</span>
-                            </span>
-                            <ArrowRight className="w-3.5 h-3.5" />
+                            <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-semibold text-teal-700 group-hover:translate-x-0.5 transition-transform">
+                              <span className="flex items-center space-x-1">
+                                <PlayCircle className="w-3.5 h-3.5" />
+                                <span>Watch Videos & Book Exam Slot</span>
+                              </span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 export default MyCourses;
-

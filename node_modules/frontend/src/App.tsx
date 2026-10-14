@@ -9,6 +9,7 @@ import { Register } from './pages/auth/Register';
 
 // Student Pages
 import { TotalCourses } from './pages/student/TotalCourses';
+import { CourseOverview } from './pages/student/CourseOverview';
 import { MyCourses } from './pages/student/MyCourses';
 import { LevelDetailPage } from './pages/student/LevelDetailPage';
 import { ExamArena } from './pages/student/ExamArena';
@@ -77,6 +78,14 @@ export const App: React.FC = () => {
               element={
                 <ProtectedRoute roles={['student']}>
                   <TotalCourses />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student/course-overview/:languageSlug"
+              element={
+                <ProtectedRoute roles={['student']}>
+                  <CourseOverview />
                 </ProtectedRoute>
               }
             />

@@ -15,6 +15,9 @@ export interface IStudentProgress extends Document {
   languageId: mongoose.Types.ObjectId;
   highestUnlockedLevel: number; // Defaults to 1 (Level 1 has no prerequisite)
   completedLevels: ICompletedLevelRecord[];
+  isEnrolled: boolean;
+  enrolledLevels: number[];
+  enrolledAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,7 +40,10 @@ const StudentProgressSchema = new Schema<IStudentProgress>(
     studentId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     languageId: { type: Schema.Types.ObjectId, ref: 'ProgrammingLanguage', required: true, index: true },
     highestUnlockedLevel: { type: Number, default: 1, min: 1 },
-    completedLevels: [CompletedLevelRecordSchema]
+    completedLevels: [CompletedLevelRecordSchema],
+    isEnrolled: { type: Boolean, default: false },
+    enrolledLevels: { type: [Number], default: [] },
+    enrolledAt: { type: Date, default: null }
   },
   { timestamps: true }
 );
@@ -49,4 +55,3 @@ export const StudentProgress = mongoose.model<IStudentProgress>(
   'StudentProgress',
   StudentProgressSchema
 );
-
