@@ -11,8 +11,6 @@ import { Register } from './pages/auth/Register';
 import { TotalCourses } from './pages/student/TotalCourses';
 import { MyCourses } from './pages/student/MyCourses';
 import { LevelDetailPage } from './pages/student/LevelDetailPage';
-import { StudentDashboard } from './pages/student/StudentDashboard';
-import { ExamSchedule } from './pages/student/ExamSchedule';
 import { ExamArena } from './pages/student/ExamArena';
 import { ExamResultView } from './pages/student/ExamResultView';
 
@@ -98,22 +96,9 @@ export const App: React.FC = () => {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/student/dashboard"
-              element={
-                <ProtectedRoute roles={['student']}>
-                  <StudentDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/student/schedule"
-              element={
-                <ProtectedRoute roles={['student']}>
-                  <ExamSchedule />
-                </ProtectedRoute>
-              }
-            />
+            {/* Redirect legacy routes to the two student pages */}
+            <Route path="/student/dashboard" element={<Navigate to="/student/total-courses" replace />} />
+            <Route path="/student/schedule" element={<Navigate to="/student/my-courses" replace />} />
             <Route
               path="/exam/:examId"
               element={

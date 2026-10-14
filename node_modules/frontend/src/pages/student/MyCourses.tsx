@@ -159,10 +159,10 @@ export const MyCourses: React.FC = () => {
               </span>
             </h2>
             <Link
-              to="/student/schedule"
+              to="/student/total-courses"
               className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center space-x-1"
             >
-              <span>View Full Calendar Schedule</span>
+              <span>Explore All Courses</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>

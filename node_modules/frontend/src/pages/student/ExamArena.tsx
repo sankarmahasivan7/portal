@@ -92,7 +92,7 @@ export const ExamArena: React.FC = () => {
         setCodeMap(initialCode);
       } catch (err: any) {
         alert(err.response?.data?.message || 'Failed to initialize examination session.');
-        navigate('/student/dashboard');
+        navigate('/student/my-courses');
       } finally {
         setIsInitializing(false);
       }

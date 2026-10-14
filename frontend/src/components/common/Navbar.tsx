@@ -77,29 +77,6 @@ export const Navbar: React.FC = () => {
                     <span>My Courses</span>
                   </Link>
 
-                  <Link
-                    to="/student/schedule"
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                      isActive('/student/schedule')
-                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4" />
-                    <span>Examinations</span>
-                  </Link>
-
-                  <Link
-                    to="/student/dashboard"
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                      isActive('/student/dashboard')
-                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    <span>Dashboard</span>
-                  </Link>
                 </>
               )}
 
@@ -249,20 +226,6 @@ export const Navbar: React.FC = () => {
                 className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
               >
                 My Courses
-              </Link>
-              <Link
-                to="/student/schedule"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              >
-                Examinations
-              </Link>
-              <Link
-                to="/student/dashboard"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              >
-                Dashboard
               </Link>
             </>
           ) : (
