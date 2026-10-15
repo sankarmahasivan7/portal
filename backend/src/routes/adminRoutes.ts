@@ -25,6 +25,8 @@ import {
   markAttendanceDirect,
   markBulkAttendanceDirect,
   removeAbsentCourseFromStudent,
+  searchStudentsForAssignment,
+  assignStudentToCourseExam,
   getAdminResults,
   exportResultsCsv,
   getAuditLogs,
@@ -74,6 +76,8 @@ router.get('/attendance', requireRole(['admin', 'faculty', 'controller']), getAt
 router.post('/attendance/mark', requireRole(['admin', 'faculty', 'controller']), markAttendanceDirect);
 router.post('/attendance/bulk-mark', requireRole(['admin', 'faculty', 'controller']), markBulkAttendanceDirect);
 router.post('/attendance/remove-absent-course', requireRole(['admin', 'faculty', 'controller']), removeAbsentCourseFromStudent);
+router.get('/attendance/search-students', requireRole(['admin', 'faculty', 'controller']), searchStudentsForAssignment);
+router.post('/attendance/assign-course-exam', requireRole(['admin', 'faculty', 'controller']), assignStudentToCourseExam);
 router.get('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty', 'controller']), getSlotAttendance);
 router.post('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty', 'controller']), markStudentAttendance);
 router.post('/exams/:id/slots/:slotId/attendance/bulk', requireRole(['admin', 'faculty', 'controller']), markBulkAttendance);

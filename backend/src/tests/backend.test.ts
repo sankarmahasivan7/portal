@@ -5,6 +5,7 @@ import { User } from '../models/User';
 import { ProgrammingLanguage } from '../models/ProgrammingLanguage';
 import { Examination } from '../models/Examination';
 import { ExaminationSlot } from '../models/ExaminationSlot';
+import { ExaminationRegistration } from '../models/ExaminationRegistration';
 import { StudentProgress } from '../models/StudentProgress';
 import { ProgressionService } from '../services/ProgressionService';
 import { runSeed } from '../scripts/seed';
@@ -506,6 +507,55 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       // Level 2 (Ongoing) MUST appear in My Courses!
       const hasOngoingLevel2 = cCourse.levels.some((l: any) => l.levelNumber === 2);
       expect(hasOngoingLevel2).toBe(true);
+    });
+  });
+
+  describe('4. Faculty Fast-Track Exam Assignment for Early Completers', () => {
+    test('Faculty assigns another course exam to student using student ID and student starts immediately', async () => {
+      // Find an exam for Python Level 1
+      const pythonExam = await Examination.findOne({ languageId: pythonLanguageId, levelNumber: 1 });
+      expect(pythonExam).toBeDefined();
+
+      const assignRes = await request(app)
+        .post('/api/admin/attendance/assign-course-exam')
+        .set('Authorization', `Bearer ${facultyToken}`)
+        .send({
+          studentIdentifier: 'CS2026-001',
+          examinationId: pythonExam!._id.toString(),
+          labName: 'Lab 1',
+          timeWindow: '09:15 to 10:15'
+        });
+
+      expect(assignRes.status).toBe(200);
+      expect(assignRes.body.success).toBe(true);
+      expect(assignRes.body.message).toContain('Python');
+
+      // Check that registration is active and marked Present
+      const reg = await ExaminationRegistration.findOne({
+        examinationId: pythonExam!._id,
+        studentId: student1Id
+      });
+      expect(reg).toBeDefined();
+      expect(reg!.status).toBe('registered');
+      expect(reg!.attendanceStatus).toBe('present');
+
+      // Check that Python appears in student's My Courses as an ongoing registered level
+      const myCoursesRes = await request(app)
+        .get('/api/student/my-courses')
+        .set('Authorization', `Bearer ${student1Token}`);
+      expect(myCoursesRes.status).toBe(200);
+      const pyCourse = myCoursesRes.body.courses.find((c: any) => c.languageId === pythonLanguageId);
+      expect(pyCourse).toBeDefined();
+      const pyLevel1 = pyCourse.levels.find((l: any) => l.levelNumber === 1);
+      expect(pyLevel1).toBeDefined();
+
+      // Student can start examination session immediately without 403 or waiting
+      const startRes = await request(app)
+        .post(`/api/exams/${pythonExam!._id}/start-session`)
+        .set('Authorization', `Bearer ${student1Token}`);
+      expect(startRes.status).toBe(201);
+      expect(startRes.body.success).toBe(true);
+      expect(startRes.body.sessionId).toBeDefined();
     });
   });
 });

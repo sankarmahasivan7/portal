@@ -1376,3 +1376,214 @@ function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Quick search / lookup for students by studentId, name, or email for faculty test assignment
+ */
+export async function searchStudentsForAssignment(req: AuthRequest, res: Response) {
+  try {
+    const { query } = req.query;
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      const students = await User.find({ role: 'student', isActive: true })
+        .select('_id studentId firstName lastName email department year section')
+        .limit(10);
+      return res.json({ success: true, students });
+    }
+
+    const q = escapeRegex(query.trim());
+    const students = await User.find({
+      role: 'student',
+      isActive: true,
+      $or: [
+        { studentId: { $regex: q, $options: 'i' } },
+        { firstName: { $regex: q, $options: 'i' } },
+        { lastName: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } }
+      ]
+    })
+      .select('_id studentId firstName lastName email department year section')
+      .limit(15);
+
+    return res.json({ success: true, students });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Student search error', error: error.message });
+  }
+}
+
+/**
+ * Faculty Fast-Track Assignment:
+ * When a student clears questions early in their slot (e.g. within 20 mins),
+ * faculty can assign another course/level test using the student's ID.
+ * This directly enrolls the student, secures an open lab slot, and marks attendance as 'present'
+ * so the student can immediately launch and take the new test.
+ */
+export async function assignStudentToCourseExam(req: AuthRequest, res: Response) {
+  try {
+    const { studentIdentifier, examinationId, labName, timeWindow } = req.body;
+
+    if (!studentIdentifier) {
+      return res.status(400).json({ success: false, message: 'Student ID or register number is required.' });
+    }
+    if (!examinationId) {
+      return res.status(400).json({ success: false, message: 'Examination ID is required.' });
+    }
+
+    // 1. Locate student
+    const trimmedId = studentIdentifier.trim();
+    const student = await User.findOne({
+      $or: [
+        { studentId: trimmedId },
+        { studentId: { $regex: new RegExp(`^${escapeRegex(trimmedId)}$`, 'i') } },
+        { email: trimmedId.toLowerCase() },
+        ...(mongoose.isValidObjectId(trimmedId) ? [{ _id: trimmedId }] : [])
+      ],
+      role: 'student'
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: `Student with identifier '${trimmedId}' was not found. Please verify the Student ID or Register Number.`
+      });
+    }
+
+    // 2. Locate examination
+    const exam = await Examination.findById(examinationId).populate('languageId');
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Examination not found.' });
+    }
+
+    const language: any = exam.languageId;
+    const languageId = language._id || language;
+
+    // 3. Ensure student course enrollment and level unlock in StudentProgress
+    let progress = await StudentProgress.findOne({
+      studentId: student._id,
+      languageId
+    });
+
+    if (!progress) {
+      progress = await StudentProgress.create({
+        studentId: student._id,
+        languageId,
+        highestUnlockedLevel: Math.max(1, exam.levelNumber),
+        completedLevels: [],
+        isEnrolled: true,
+        enrolledLevels: [exam.levelNumber],
+        enrolledAt: new Date()
+      });
+    } else {
+      progress.isEnrolled = true;
+      if (!progress.enrolledLevels) {
+        progress.enrolledLevels = [];
+      }
+      if (!progress.enrolledLevels.includes(exam.levelNumber)) {
+        progress.enrolledLevels.push(exam.levelNumber);
+      }
+      if (progress.highestUnlockedLevel < exam.levelNumber) {
+        progress.highestUnlockedLevel = exam.levelNumber;
+      }
+      await progress.save();
+    }
+
+    // 4. Find or create an active lab slot for this examination
+    const now = new Date();
+    const targetLab = labName || 'Lab 1';
+    const targetWindow = timeWindow || '09:15 to 10:15';
+
+    let slot = await ExaminationSlot.findOne({
+      examinationId: exam._id,
+      labName: targetLab,
+      timeWindow: targetWindow
+    });
+
+    if (!slot) {
+      slot = await ExaminationSlot.findOne({ examinationId: exam._id });
+    }
+
+    if (!slot) {
+      slot = await ExaminationSlot.create({
+        examinationId: exam._id,
+        slotNumber: 1,
+        slotName: `Fast-Track Lab Session (${targetLab})`,
+        labName: targetLab,
+        timeWindow: targetWindow,
+        startTime: new Date(now.getTime() - 15 * 60 * 1000), // 15 mins prior so slot is immediately open
+        endTime: new Date(now.getTime() + 2 * 3600 * 1000),  // 2 hours window
+        capacity: 50,
+        registeredCount: 0
+      });
+    } else {
+      // Ensure the slot time window is currently open for immediate testing
+      const slotEnd = new Date(slot.endTime).getTime();
+      if (slotEnd < now.getTime()) {
+        slot.startTime = new Date(now.getTime() - 15 * 60 * 1000);
+        slot.endTime = new Date(now.getTime() + 2 * 3600 * 1000);
+        await slot.save();
+      }
+    }
+
+    // Increment slot registered count
+    await ExaminationSlot.findByIdAndUpdate(slot._id, {
+      $inc: { registeredCount: 1 }
+    });
+
+    // 5. Clean up previous registration for this exact exam if attended or cancelled
+    await ExaminationRegistration.deleteMany({
+      examinationId: exam._id,
+      studentId: student._id
+    });
+
+    // 6. Create active registration with attendance directly marked as 'present'
+    const registration = await ExaminationRegistration.create({
+      examinationId: exam._id,
+      slotId: slot._id,
+      studentId: student._id,
+      status: 'registered',
+      attendanceStatus: 'present', // Staff verified present!
+      markedPresentAt: now,
+      markedBy: req.userId,
+      registeredAt: now
+    });
+
+    // 7. Notification for the student
+    await Notification.create({
+      userId: student._id,
+      title: `Fast-Track Test Assigned: ${exam.title}`,
+      message: `Faculty has assigned you to take the ${exam.title} assessment in ${slot.labName} (${slot.timeWindow}). Your attendance is verified Present; you can take the test immediately!`,
+      type: 'registration',
+      read: false
+    }).catch(() => {});
+
+    await logAudit(
+      'FACULTY_ASSIGNED_FAST_TRACK_EXAM',
+      {
+        facultyId: req.userId,
+        studentId: student._id,
+        studentIdentifier: student.studentId,
+        examinationId: exam._id,
+        slotId: slot._id,
+        labName: slot.labName
+      },
+      req
+    );
+
+    return res.json({
+      success: true,
+      message: `Assigned ${student.firstName} ${student.lastName} (${student.studentId || student.email}) to ${exam.title}. Attendance is marked Present and the student can take the test immediately!`,
+      assignment: {
+        registrationId: registration._id,
+        studentName: `${student.firstName} ${student.lastName}`,
+        studentId: student.studentId || student.email,
+        examId: exam._id,
+        examTitle: exam.title,
+        levelNumber: exam.levelNumber,
+        languageName: language.name || 'Course',
+        labName: slot.labName,
+        timeWindow: slot.timeWindow
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to assign course exam', error: error.message });
+  }
+}
+

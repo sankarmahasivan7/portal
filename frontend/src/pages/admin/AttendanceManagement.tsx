@@ -14,8 +14,11 @@ import {
   Calendar,
   Layers,
   Filter,
-  Trash2
+  Trash2,
+  Zap,
+  AlertCircle
 } from 'lucide-react';
+import { AssignCourseExamModal } from '../../components/admin/AssignCourseExamModal';
 
 interface StudentItem {
   registrationId: string;
@@ -91,6 +94,22 @@ export const AttendanceManagement: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Fast-track exam assignment modal state
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [studentToAssign, setStudentToAssign] = useState<any>(null);
+  const [notificationToast, setNotificationToast] = useState<string | null>(null);
+
+  const handleOpenAssignModal = (student?: any) => {
+    setStudentToAssign(student || null);
+    setShowAssignModal(true);
+  };
+
+  const handleAssignSuccess = (message: string) => {
+    setNotificationToast(message);
+    fetchAttendance(false);
+    setTimeout(() => setNotificationToast(null), 8000);
+  };
 
   // 1. Fetch attendance sorted & filtered by timing and lab
   const fetchAttendance = async (silent = false) => {
@@ -462,6 +481,15 @@ export const AttendanceManagement: React.FC = () => {
 
             <div className="flex items-center space-x-2">
               <button
+                onClick={() => handleOpenAssignModal()}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-xs"
+                title="Student finished early in 20 mins? Assign another course test immediately"
+              >
+                <Zap className="w-4 h-4 fill-white" />
+                <span>Assign Another Course</span>
+              </button>
+
+              <button
                 onClick={handleMarkAllPresent}
                 disabled={summary.pendingCount === 0 || isRefreshing}
                 className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition flex items-center space-x-1.5 shadow-xs"
@@ -568,6 +596,16 @@ export const AttendanceManagement: React.FC = () => {
 
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end space-x-1.5">
+                            {/* Fast-Track Assign Another Course Button */}
+                            <button
+                              onClick={() => handleOpenAssignModal(item.student)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs"
+                              title="Student cleared exam early? Assign another course test immediately"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                              <span>Assign Test</span>
+                            </button>
+
                             {/* Mark Present Button */}
                             <button
                               onClick={() => handleMarkAttendance(item.registrationId, 'present')}
@@ -638,6 +676,35 @@ export const AttendanceManagement: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {notificationToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 flex items-start space-x-3 animate-in fade-in slide-in-from-bottom-4">
+          <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+            <Zap className="w-4 h-4 fill-slate-950" />
+          </div>
+          <div className="flex-1 text-xs">
+            <span className="font-bold block text-white text-sm">Fast-Track Test Assigned</span>
+            <span className="text-slate-300">{notificationToast}</span>
+          </div>
+          <button
+            onClick={() => setNotificationToast(null)}
+            className="text-slate-400 hover:text-white ml-2 text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Fast-Track Course Exam Modal */}
+      <AssignCourseExamModal
+        isOpen={showAssignModal}
+        onClose={() => setShowAssignModal(false)}
+        onSuccess={handleAssignSuccess}
+        preSelectedStudent={studentToAssign}
+        currentLab={selectedLab}
+        currentTiming={selectedTiming}
+      />
     </div>
   );
 };
