@@ -441,5 +441,34 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(reEnrollRes.status).toBe(200);
       expect(reEnrollRes.body.success).toBe(true);
     });
+
+    test('Completed level is removed from My Courses: only ongoing course levels appear', async () => {
+      // Ensure student has Level 1 in completedLevels
+      const prog = await StudentProgress.findOne({ studentId: student1Id, languageId: cLanguageId });
+      expect(prog!.completedLevels.some((c) => c.levelNumber === 1)).toBe(true);
+
+      // Register for Level 2 (ongoing)
+      await request(app)
+        .post('/api/student/course/c/register')
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({ levelNumber: 2 });
+
+      // Call getMyCourses
+      const myCoursesRes = await request(app)
+        .get('/api/student/my-courses')
+        .set('Authorization', `Bearer ${student1Token}`);
+
+      expect(myCoursesRes.status).toBe(200);
+      const cCourse = myCoursesRes.body.courses.find((c: any) => c.languageId === cLanguageId);
+      expect(cCourse).toBeDefined();
+
+      // Crucial requirement: Level 1 (Completed/Passed) MUST NOT appear in My Courses!
+      const hasCompletedLevel1 = cCourse.levels.some((l: any) => l.levelNumber === 1);
+      expect(hasCompletedLevel1).toBe(false);
+
+      // Level 2 (Ongoing) MUST appear in My Courses!
+      const hasOngoingLevel2 = cCourse.levels.some((l: any) => l.levelNumber === 2);
+      expect(hasOngoingLevel2).toBe(true);
+    });
   });
 });

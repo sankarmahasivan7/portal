@@ -336,11 +336,18 @@ export class ProgressionService {
         );
       }
 
+      // Rule: Once a level is completed (passed), remove it from enrolledLevels so it is removed from My Courses
+      if (progress.enrolledLevels && progress.enrolledLevels.length > 0) {
+        progress.enrolledLevels = progress.enrolledLevels.filter((lvl) => lvl !== exam.levelNumber);
+        if (progress.enrolledLevels.length === 0) {
+          progress.isEnrolled = false;
+        }
+      }
+
       await progress.save();
 
-      await ExaminationRegistration.updateMany(
-        { examinationId: exam._id, studentId: session.studentId },
-        { status: 'attended' }
+      await ExaminationRegistration.deleteMany(
+        { examinationId: exam._id, studentId: session.studentId }
       );
     } else {
       // Failed exam logic:

@@ -345,11 +345,35 @@ export async function getMyCourses(req: AuthRequest, res: Response) {
         }
       });
 
-      // If student has registered for any levels in this course:
-      if (enrolledLevelsSet.size > 0) {
-        // Filter levels in this course strictly to the registered levels
-        const filteredLevels = prog.levels.filter((lvl) => enrolledLevelsSet.has(lvl.levelNumber));
-        const completedLevels = prog.levels.filter((l) => l.status === 'Passed').length;
+      // Rule: If the student completed the level (passed) or attended but failed,
+      // it MUST BE REMOVED from My Courses.
+      // ONLY the ongoing course levels and not attended (absent) must be shown in My Courses!
+      const completedLevelsSet = new Set<number>(
+        (doc?.completedLevels || []).map((c: any) => c.levelNumber)
+      );
+
+      // Remove completed levels from the enrolled set
+      completedLevelsSet.forEach((lvlNum) => {
+        enrolledLevelsSet.delete(lvlNum);
+      });
+
+      // Filter levels in this course strictly to ongoing or absent levels (NOT passed, NOT failed)
+      const ongoingOrAbsentLevels = prog.levels.filter((lvl) => {
+        // If completed/passed, remove from My Courses
+        if (lvl.status === 'Passed' || completedLevelsSet.has(lvl.levelNumber)) {
+          return false;
+        }
+        // If failed, remove from My Courses
+        if (lvl.status === 'Failed') {
+          return false;
+        }
+        // Must be in enrolledLevelsSet
+        return enrolledLevelsSet.has(lvl.levelNumber);
+      });
+
+      // If student has any ongoing or absent levels in this course:
+      if (ongoingOrAbsentLevels.length > 0) {
+        const completedLevels = completedLevelsSet.size;
 
         enrolledCourses.push({
           languageId: prog.languageId,
@@ -357,9 +381,9 @@ export async function getMyCourses(req: AuthRequest, res: Response) {
           slug: prog.slug,
           totalLevels: prog.totalLevels,
           completedLevels,
-          registeredLevels: filteredLevels.length,
+          registeredLevels: ongoingOrAbsentLevels.length,
           highestUnlockedLevel: prog.highestUnlockedLevel,
-          levels: filteredLevels
+          levels: ongoingOrAbsentLevels
         });
       }
     }

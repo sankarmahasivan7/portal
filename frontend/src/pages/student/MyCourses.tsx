@@ -72,6 +72,15 @@ export const MyCourses: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Filter courses strictly: only courses with ongoing or absent levels
+  // Rule: Completed (passed) and failed levels are removed from My Courses
+  const visibleCourses = courses
+    .map((c) => ({
+      ...c,
+      levels: c.levels.filter((lvl) => lvl.status !== 'Passed' && lvl.status !== 'Failed')
+    }))
+    .filter((c) => c.levels.length > 0);
+
   useEffect(() => {
     const fetchMyCourses = async () => {
       try {
@@ -135,7 +144,7 @@ export const MyCourses: React.FC = () => {
           {/* Course Count Highlight Badge */}
           <div className="bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-200 rounded-2xl p-4 sm:p-5 flex items-center space-x-4 shadow-sm">
             <div className="w-12 h-12 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-xl shadow">
-              {courses.length}
+              {visibleCourses.length}
             </div>
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-teal-800">
@@ -144,7 +153,7 @@ export const MyCourses: React.FC = () => {
               <div className="text-sm font-semibold text-slate-900">
                 Enrolled in{' '}
                 <span className="text-teal-700 font-bold">
-                  {courses.length} {courses.length === 1 ? 'Programming Course' : 'Programming Courses'}
+                  {visibleCourses.length} {visibleCourses.length === 1 ? 'Programming Course' : 'Programming Courses'}
                 </span>
               </div>
             </div>
@@ -173,16 +182,16 @@ export const MyCourses: React.FC = () => {
             </Link>
           </div>
 
-          {courses.length === 0 ? (
+          {visibleCourses.length === 0 ? (
             /* Empty state when student hasn't registered for any course yet */
             <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center space-y-4 shadow-sm">
               <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-200 text-teal-600 mx-auto flex items-center justify-center">
                 <BookOpen className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-xl font-bold text-slate-900">No Courses Registered Yet</h3>
+                <h3 className="text-xl font-bold text-slate-900">No Ongoing Courses Registered</h3>
                 <p className="text-sm text-slate-500 max-w-md mx-auto">
-                  To view and take assessments, browse the curriculum tracks in <strong>Total Courses</strong>, view topics and attempts for each level, and click <strong>Register</strong>!
+                  Only ongoing or absent courses appear here. Completed levels and failed levels are removed. Browse <strong>Total Courses</strong> to register for your next level!
                 </p>
               </div>
               <div className="pt-2">
@@ -197,7 +206,7 @@ export const MyCourses: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              {courses.map((course) => (
+              {visibleCourses.map((course) => (
                 <div
                   key={course.languageId}
                   className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
@@ -211,7 +220,7 @@ export const MyCourses: React.FC = () => {
                       <div>
                         <h3 className="text-lg font-bold text-slate-900">{course.languageName}</h3>
                         <div className="text-xs text-slate-500 flex items-center space-x-3 mt-0.5">
-                          <span>Registered Levels: <strong className="text-teal-700">{course.levels.length}</strong></span>
+                          <span>Ongoing Levels: <strong className="text-teal-700">{course.levels.filter((l) => l.status !== 'Passed' && l.status !== 'Failed').length}</strong></span>
                           <span>•</span>
                           <span>Completed: <strong className="text-emerald-600">{course.completedLevels}</strong></span>
                         </div>
@@ -232,33 +241,32 @@ export const MyCourses: React.FC = () => {
                   {/* Registered Levels Grid */}
                   <div className="p-5 sm:p-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {course.levels.map((lvl) => {
-                        const isPassed = lvl.status === 'Passed';
-                        const isRegistered = lvl.status === 'Registered';
-                        const matchingReg = registeredExams.find(
-                          (r) => r.languageId === course.languageId && r.levelNumber === lvl.levelNumber
-                        );
-                        const isAbsent = matchingReg?.attendanceStatus === 'absent';
+                      {course.levels
+                        .filter((lvl) => lvl.status !== 'Passed' && lvl.status !== 'Failed')
+                        .map((lvl) => {
+                          const isRegistered = lvl.status === 'Registered';
+                          const matchingReg = registeredExams.find(
+                            (r) => r.languageId === course.languageId && r.levelNumber === lvl.levelNumber
+                          );
+                          const isAbsent = matchingReg?.attendanceStatus === 'absent';
 
-                        return (
-                          <div
-                            key={lvl.levelNumber}
-                            onClick={() => {
-                              if (!isAbsent) {
-                                navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`);
-                              }
-                            }}
-                            className={`rounded-2xl p-4 border transition-all flex flex-col justify-between space-y-3 group ${
-                              isAbsent
-                                ? 'bg-rose-50/40 border-rose-200 cursor-not-allowed'
-                                : 'cursor-pointer ' +
-                                  (isPassed
-                                    ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
-                                    : isRegistered
-                                    ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
-                                    : 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm')
-                            }`}
-                          >
+                          return (
+                            <div
+                              key={lvl.levelNumber}
+                              onClick={() => {
+                                if (!isAbsent) {
+                                  navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`);
+                                }
+                              }}
+                              className={`rounded-2xl p-4 border transition-all flex flex-col justify-between space-y-3 group ${
+                                isAbsent
+                                  ? 'bg-rose-50/40 border-rose-200 cursor-not-allowed'
+                                  : 'cursor-pointer ' +
+                                    (isRegistered
+                                      ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
+                                      : 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm')
+                              }`}
+                            >
                             <div className="flex items-start justify-between">
                               <div>
                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -275,11 +283,6 @@ export const MyCourses: React.FC = () => {
                                   <XCircle className="w-3.5 h-3.5" />
                                   <span>Marked Absent</span>
                                 </span>
-                              ) : isPassed ? (
-                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Passed</span>
-                                </span>
                               ) : isRegistered ? (
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
                                   <Clock className="w-3.5 h-3.5" />
@@ -288,7 +291,7 @@ export const MyCourses: React.FC = () => {
                               ) : (
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-800 border border-teal-200">
                                   <Unlock className="w-3.5 h-3.5" />
-                                  <span>Registered</span>
+                                  <span>Registered (Ongoing)</span>
                                 </span>
                               )}
                             </div>
@@ -296,11 +299,9 @@ export const MyCourses: React.FC = () => {
                             <p className="text-xs text-slate-500 line-clamp-2">
                               {isAbsent
                                 ? 'Marked absent by staff. Only an administrator can remove this course so you can register again.'
-                                : isPassed
-                                ? `Completed successfully with ${lvl.scorePercentage || 100}%. Certificate eligible.`
                                 : isRegistered
                                 ? 'Slot booked! Click to view lecture notes or enter the assessment room.'
-                                : 'Registered level! Click to watch course videos and select your preferred examination slot.'}
+                                : 'Registered ongoing level! Click to watch course videos and select your preferred examination slot.'}
                             </p>
 
                             {isAbsent ? (
