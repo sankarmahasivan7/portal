@@ -81,12 +81,26 @@ export const CourseOverview: React.FC = () => {
       setRegisteringLevel(levelNumber);
       setSuccessMsg(null);
       setError(null);
+
+      // Real-time optimistic update
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          levels: prev.levels.map((l) =>
+            l.levelNumber === levelNumber ? { ...l, isEnrolled: true } : l
+          )
+        };
+      });
+
       const res = await api.post(`/student/course/${languageSlug}/register`, { levelNumber });
       if (res.data.success) {
         setSuccessMsg(res.data.message || `Registered for Level ${levelNumber}! It now appears in My Courses.`);
         fetchOverview();
       }
     } catch (err: any) {
+      // Revert if failed
+      fetchOverview();
       setError(err.response?.data?.message || 'Failed to register for course level.');
     } finally {
       setRegisteringLevel(null);
@@ -299,34 +313,15 @@ export const CourseOverview: React.FC = () => {
                       {/* Action Area */}
                       <div>
                         {lvl.isPassed ? (
-                          <button
-                            onClick={() =>
-                              navigate(`/student/course/${language.slug}/level/${lvl.levelNumber}`)
-                            }
-                            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition flex items-center space-x-1.5"
-                          >
-                            <PlayCircle className="w-4 h-4 text-teal-600" />
-                            <span>Review Course Videos</span>
-                          </button>
+                          <span className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-bold">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>Level Completed</span>
+                          </span>
                         ) : lvl.isEnrolled ? (
-                          <div className="flex items-center space-x-2">
-                            <Link
-                              to="/student/my-courses"
-                              className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs flex items-center space-x-1.5"
-                            >
-                              <span>Book Slot in My Courses</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </Link>
-
-                            <button
-                              onClick={() =>
-                                navigate(`/student/course/${language.slug}/level/${lvl.levelNumber}`)
-                              }
-                              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
-                            >
-                              Videos & Slots
-                            </button>
-                          </div>
+                          <span className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-teal-50 border border-teal-200 rounded-xl text-teal-800 text-xs font-bold shadow-xs">
+                            <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                            <span>Registered for Level {lvl.levelNumber}</span>
+                          </span>
                         ) : lvl.isEligible ? (
                           <button
                             onClick={() => handleRegisterLevel(lvl.levelNumber)}

@@ -189,15 +189,26 @@ export async function registerForExamSlot(req: AuthRequest, res: Response) {
       return res.status(400).json({ success: false, message: 'Registration deadline has passed.' });
     }
 
-    // Check duplicate registration
+    // Check existing registration
     const existingReg = await ExaminationRegistration.findOne({
       examinationId: exam._id,
-      studentId,
-      status: 'registered'
+      studentId
     });
 
     if (existingReg) {
-      return res.status(400).json({ success: false, message: 'You are already registered for this examination.' });
+      if (existingReg.attendanceStatus === 'absent') {
+        return res.status(400).json({
+          success: false,
+          message: 'You were marked absent for this examination. Only an administrator or staff can remove this course from your My Courses before you can register again.'
+        });
+      }
+      if (existingReg.status === 'registered') {
+        return res.status(400).json({ success: false, message: 'You are already registered for this examination.' });
+      }
+      // Clean up past attended or cancelled record to avoid compound unique index collision
+      if (existingReg.status === 'attended' || existingReg.status === 'cancelled') {
+        await ExaminationRegistration.findByIdAndDelete(existingReg._id);
+      }
     }
 
     // Atomic slot capacity check and increment (real-time capacity verification)

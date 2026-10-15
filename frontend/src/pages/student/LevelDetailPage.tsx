@@ -519,21 +519,27 @@ export const LevelDetailPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <Link
-                    to={`/exam/${examination?._id}`}
-                    className={`w-full py-2.5 rounded-xl font-semibold text-xs transition flex items-center justify-center space-x-2 shadow-xs ${
-                      registration.attendanceStatus === 'present'
-                        ? 'bg-teal-600 hover:bg-teal-700 text-white'
-                        : 'bg-slate-900 hover:bg-slate-800 text-white'
-                    }`}
-                  >
-                    <span>
-                      {registration.attendanceStatus === 'present'
-                        ? 'Enter Exam Arena (Unlocked)'
-                        : 'Enter Exam Arena (Lab Gate)'}
-                    </span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  {registration.attendanceStatus === 'absent' ? (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs text-center font-medium">
+                      You were marked absent by staff. Only an administrator can remove this course from your My Courses before you can register again.
+                    </div>
+                  ) : (
+                    <Link
+                      to={`/exam/${examination?._id}`}
+                      className={`w-full py-2.5 rounded-xl font-semibold text-xs transition flex items-center justify-center space-x-2 shadow-xs ${
+                        registration.attendanceStatus === 'present'
+                          ? 'bg-teal-600 hover:bg-teal-700 text-white'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white'
+                      }`}
+                    >
+                      <span>
+                        {registration.attendanceStatus === 'present'
+                          ? 'Enter Exam Arena (Unlocked)'
+                          : 'Enter Exam Arena (Lab Gate)'}
+                      </span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  )}
                 </div>
               )}
 

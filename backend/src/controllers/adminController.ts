@@ -16,6 +16,7 @@ import { Submission } from '../models/Submission';
 import { Notification } from '../models/Notification';
 import { AuditLog } from '../models/AuditLog';
 import { PlatformConfiguration } from '../models/PlatformConfiguration';
+import { StudentProgress } from '../models/StudentProgress';
 import { checkWorkerHealth } from '../services/ExecutionClient';
 import { logAudit } from '../services/AuditService';
 
@@ -1285,6 +1286,89 @@ export async function markBulkAttendanceDirect(req: AuthRequest, res: Response) 
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Failed to bulk update attendance', error: error.message });
+  }
+}
+
+/**
+ * Admin action: Remove an absent course from a student's "My Courses".
+ * Rule: If a student is absent in the exam, ONLY admin can remove that course in My Courses.
+ * After that, the student can register for the exam again in Total Courses.
+ */
+export async function removeAbsentCourseFromStudent(req: AuthRequest, res: Response) {
+  try {
+    const { registrationId } = req.body;
+
+    if (!registrationId) {
+      return res.status(400).json({ success: false, message: 'registrationId is required' });
+    }
+
+    const registration = await ExaminationRegistration.findById(registrationId).populate('examinationId');
+    if (!registration) {
+      return res.status(404).json({ success: false, message: 'Registration record not found' });
+    }
+
+    if (registration.attendanceStatus !== 'absent') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only registrations marked as absent can be removed from student My Courses by admin.'
+      });
+    }
+
+    const exam = registration.examinationId as any;
+    const studentId = registration.studentId;
+
+    // 1. Decrement slot count if slot exists
+    if (registration.slotId) {
+      await ExaminationSlot.findByIdAndUpdate(registration.slotId, {
+        $inc: { registeredCount: -1 }
+      });
+    }
+
+    // 2. Remove levelNumber from student's enrolledLevels in StudentProgress
+    if (exam && exam.languageId && exam.levelNumber) {
+      const progress = await StudentProgress.findOne({
+        studentId,
+        languageId: exam.languageId
+      });
+      if (progress && progress.enrolledLevels) {
+        progress.enrolledLevels = progress.enrolledLevels.filter((l) => l !== exam.levelNumber);
+        if (progress.enrolledLevels.length === 0) {
+          progress.isEnrolled = false;
+        }
+        await progress.save();
+      }
+    }
+
+    // 3. Delete the absent registration so the student is freed to re-register
+    await ExaminationRegistration.findByIdAndDelete(registrationId);
+
+    // 4. Notify student
+    await Notification.create({
+      userId: studentId,
+      title: `Absent Course Cleared: ${exam?.title || 'Examination'}`,
+      message: `The administrator has removed your absent exam record for ${exam?.title || 'Level ' + (exam?.levelNumber || '')}. You can now register for the course level again in Total Courses.`,
+      type: 'registration_cleared'
+    }).catch(() => {});
+
+    // 5. Audit log
+    await logAudit(
+      'ADMIN_REMOVED_ABSENT_COURSE',
+      {
+        registrationId,
+        studentId,
+        examId: exam?._id,
+        levelNumber: exam?.levelNumber,
+        clearedBy: req.userId
+      },
+      req
+    );
+
+    return res.json({
+      success: true,
+      message: `Successfully removed absent course from student's My Courses. The student may now register again in Total Courses.`
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to remove absent course', error: error.message });
   }
 }
 

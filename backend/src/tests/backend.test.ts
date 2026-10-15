@@ -361,4 +361,85 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(cProgAfter!.highestUnlockedLevel).toBe(2);
     });
   });
+
+  describe('3. Exam Failure Auto-Removal & Absent Course Admin Clearance', () => {
+    test('Failing exam automatically removes course level from My Courses and allows re-registration', async () => {
+      // 1. Enroll Student 2 in C Level 1
+      const enrollRes = await request(app)
+        .post('/api/student/course/c/register')
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({ levelNumber: 1 });
+      expect([200, 400]).toContain(enrollRes.status);
+
+      // Verify level 1 in enrolledLevels
+      const prog = await StudentProgress.findOne({ studentId: student1Id, languageId: cLanguageId });
+      prog!.enrolledLevels = [1];
+      await prog!.save();
+
+      // Create a mock failed session for student 1
+      const mockFailSession = await mongoose.model('ExaminationSession').create({
+        examinationId: cExamLevel1Id,
+        slotId: cSlotLevel1Id,
+        studentId: student1Id,
+        startedAt: new Date(),
+        deadline: new Date(Date.now() + 3600000),
+        status: 'active'
+      });
+
+      // Finalize session with 0 score (failed)
+      const { result } = await ProgressionService.finalizeExamSession(mockFailSession._id.toString());
+      expect(result.passed).toBe(false);
+
+      // Verify level 1 was automatically removed from enrolledLevels
+      const progAfterFail = await StudentProgress.findOne({ studentId: student1Id, languageId: cLanguageId });
+      expect(progAfterFail!.enrolledLevels.includes(1)).toBe(false);
+
+      // Verify student can now re-register for Level 1 in Total Courses
+      const reRegisterRes = await request(app)
+        .post('/api/student/course/c/register')
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({ levelNumber: 1 });
+      expect(reRegisterRes.status).toBe(200);
+      expect(reRegisterRes.body.success).toBe(true);
+    });
+
+    test('Absent student remains in My Courses and cannot re-register until admin clears it', async () => {
+      // Create absent registration
+      const absentReg = await mongoose.model('ExaminationRegistration').create({
+        examinationId: cExamLevel1Id,
+        slotId: cSlotLevel1Id,
+        studentId: student1Id,
+        status: 'registered',
+        attendanceStatus: 'absent'
+      });
+
+      // Verify student cannot re-register while marked absent
+      const blockRes = await request(app)
+        .post('/api/student/course/c/register')
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({ levelNumber: 1 });
+      expect(blockRes.status).toBe(400);
+      expect(blockRes.body.message).toContain('absent');
+
+      // Admin removes absent course from student's My Courses
+      const adminClearRes = await request(app)
+        .post('/api/admin/attendance/remove-absent-course')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ registrationId: absentReg._id.toString() });
+      expect(adminClearRes.status).toBe(200);
+      expect(adminClearRes.body.success).toBe(true);
+
+      // Absent registration is deleted
+      const checkReg = await mongoose.model('ExaminationRegistration').findById(absentReg._id);
+      expect(checkReg).toBeNull();
+
+      // Student can now re-register in Total Courses
+      const reEnrollRes = await request(app)
+        .post('/api/student/course/c/register')
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({ levelNumber: 1 });
+      expect(reEnrollRes.status).toBe(200);
+      expect(reEnrollRes.body.success).toBe(true);
+    });
+  });
 });

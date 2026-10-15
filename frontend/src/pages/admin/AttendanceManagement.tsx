@@ -13,7 +13,8 @@ import {
   ArrowLeft,
   Calendar,
   Layers,
-  Filter
+  Filter,
+  Trash2
 } from 'lucide-react';
 
 interface StudentItem {
@@ -204,6 +205,28 @@ export const AttendanceManagement: React.FC = () => {
       alert(err.response?.data?.message || 'Failed to bulk update attendance.');
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  // Remove absent course from student's My Courses (Admin only authority)
+  const handleRemoveAbsentCourse = async (registrationId: string, studentName: string) => {
+    if (!window.confirm(`Are you sure you want to remove this absent course from ${studentName}'s My Courses? This will allow the student to register for the course level again in Total Courses.`)) {
+      return;
+    }
+
+    try {
+      setActionInProgress(registrationId);
+      const res = await api.post('/admin/attendance/remove-absent-course', {
+        registrationId
+      });
+
+      if (res.data.success) {
+        fetchAttendance(false);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to remove absent course.');
+    } finally {
+      setActionInProgress(null);
     }
   };
 
@@ -574,6 +597,24 @@ export const AttendanceManagement: React.FC = () => {
                               <XCircle className="w-3.5 h-3.5" />
                               <span>Absent</span>
                             </button>
+
+                            {/* Remove Absent Course from Student's My Courses (Admin Only) */}
+                            {isAbsent && (
+                              <button
+                                onClick={() =>
+                                  handleRemoveAbsentCourse(
+                                    item.registrationId,
+                                    `${item.student?.firstName || 'Student'} ${item.student?.lastName || ''}`
+                                  )
+                                }
+                                disabled={isUpdating}
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+                                title="Remove this absent course from student's My Courses so they can register again in Total Courses"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Remove from My Courses</span>
+                              </button>
+                            )}
 
                             {/* Reset Button */}
                             {!isPending && (

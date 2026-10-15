@@ -337,6 +337,51 @@ export class ProgressionService {
       }
 
       await progress.save();
+
+      await ExaminationRegistration.updateMany(
+        { examinationId: exam._id, studentId: session.studentId },
+        { status: 'attended' }
+      );
+    } else {
+      // Failed exam logic:
+      // If the student attended the exam but failed, automatically remove the course in My Courses
+      const progress = await this.getOrCreateProgress(session.studentId, exam.languageId._id);
+      if (progress.enrolledLevels && progress.enrolledLevels.length > 0) {
+        progress.enrolledLevels = progress.enrolledLevels.filter((lvl) => lvl !== exam.levelNumber);
+        if (progress.enrolledLevels.length === 0) {
+          progress.isEnrolled = false;
+        }
+        await progress.save();
+      }
+
+      // Remove the registration record so it vanishes from My Courses and allows clean re-registration in Total Courses
+      await ExaminationRegistration.deleteMany({
+        examinationId: exam._id,
+        studentId: session.studentId
+      });
+
+      await Notification.create({
+        userId: session.studentId,
+        title: `Exam Result: Level ${exam.levelNumber} - Failed (${result.percentage}%)`,
+        message: `You scored ${result.percentage}%, which did not meet the required ${exam.passingPercentage}%. The level has been removed from My Courses. You can register again in Total Courses to retake the exam.`,
+        type: 'exam_failed',
+        metadata: {
+          languageId: exam.languageId._id,
+          levelNumber: exam.levelNumber,
+          percentage: result.percentage
+        }
+      });
+
+      await logAudit(
+        'EXAM_FAILED_AUTO_REMOVED_FROM_MY_COURSES',
+        {
+          studentId: session.studentId,
+          languageId: exam.languageId._id,
+          levelNumber: exam.levelNumber,
+          percentage: result.percentage
+        },
+        req
+      );
     }
 
     return { result, unlockedNextLevel, nextLevelNumber };

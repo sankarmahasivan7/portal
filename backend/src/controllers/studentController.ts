@@ -228,6 +228,27 @@ export async function registerCourseLevel(req: AuthRequest, res: Response) {
       }
     }
 
+    // Verify absent rule: If student was absent, admin must remove that course before student can register again
+    const examForLevel = await Examination.findOne({
+      languageId: language._id,
+      levelNumber: lvl
+    });
+
+    if (examForLevel) {
+      const absentReg = await ExaminationRegistration.findOne({
+        examinationId: examForLevel._id,
+        studentId,
+        attendanceStatus: 'absent'
+      });
+
+      if (absentReg) {
+        return res.status(400).json({
+          success: false,
+          message: `You were marked absent for ${language.name} Level ${lvl}. Only an administrator or staff can remove this course from your My Courses before you can register again.`
+        });
+      }
+    }
+
     if (!progress.enrolledLevels) {
       progress.enrolledLevels = [];
     }
@@ -271,7 +292,7 @@ export async function getMyCourses(req: AuthRequest, res: Response) {
       StudentProgress.find({ studentId }),
       ExaminationRegistration.find({
         studentId,
-        status: { $in: ['registered', 'attended'] }
+        status: 'registered'
       })
         .populate({
           path: 'examinationId',

@@ -235,19 +235,28 @@ export const MyCourses: React.FC = () => {
                       {course.levels.map((lvl) => {
                         const isPassed = lvl.status === 'Passed';
                         const isRegistered = lvl.status === 'Registered';
+                        const matchingReg = registeredExams.find(
+                          (r) => r.languageId === course.languageId && r.levelNumber === lvl.levelNumber
+                        );
+                        const isAbsent = matchingReg?.attendanceStatus === 'absent';
 
                         return (
                           <div
                             key={lvl.levelNumber}
-                            onClick={() =>
-                              navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`)
-                            }
-                            className={`rounded-2xl p-4 border transition-all cursor-pointer flex flex-col justify-between space-y-3 group ${
-                              isPassed
-                                ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
-                                : isRegistered
-                                ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
-                                : 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm'
+                            onClick={() => {
+                              if (!isAbsent) {
+                                navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`);
+                              }
+                            }}
+                            className={`rounded-2xl p-4 border transition-all flex flex-col justify-between space-y-3 group ${
+                              isAbsent
+                                ? 'bg-rose-50/40 border-rose-200 cursor-not-allowed'
+                                : 'cursor-pointer ' +
+                                  (isPassed
+                                    ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
+                                    : isRegistered
+                                    ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
+                                    : 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm')
                             }`}
                           >
                             <div className="flex items-start justify-between">
@@ -261,19 +270,22 @@ export const MyCourses: React.FC = () => {
                               </div>
 
                               {/* Badge */}
-                              {isPassed && (
+                              {isAbsent ? (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  <span>Marked Absent</span>
+                                </span>
+                              ) : isPassed ? (
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                   <CheckCircle2 className="w-3.5 h-3.5" />
                                   <span>Passed</span>
                                 </span>
-                              )}
-                              {isRegistered && (
+                              ) : isRegistered ? (
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
                                   <Clock className="w-3.5 h-3.5" />
                                   <span>Slot Booked</span>
                                 </span>
-                              )}
-                              {!isPassed && !isRegistered && (
+                              ) : (
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-800 border border-teal-200">
                                   <Unlock className="w-3.5 h-3.5" />
                                   <span>Registered</span>
@@ -282,20 +294,31 @@ export const MyCourses: React.FC = () => {
                             </div>
 
                             <p className="text-xs text-slate-500 line-clamp-2">
-                              {isPassed
+                              {isAbsent
+                                ? 'Marked absent by staff. Only an administrator can remove this course so you can register again.'
+                                : isPassed
                                 ? `Completed successfully with ${lvl.scorePercentage || 100}%. Certificate eligible.`
                                 : isRegistered
                                 ? 'Slot booked! Click to view lecture notes or enter the assessment room.'
                                 : 'Registered level! Click to watch course videos and select your preferred examination slot.'}
                             </p>
 
-                            <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-semibold text-teal-700 group-hover:translate-x-0.5 transition-transform">
-                              <span className="flex items-center space-x-1">
-                                <PlayCircle className="w-3.5 h-3.5" />
-                                <span>Watch Videos & Book Exam Slot</span>
-                              </span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </div>
+                            {isAbsent ? (
+                              <div className="pt-2 border-t border-rose-200/60 flex items-center justify-between text-xs font-semibold text-rose-700">
+                                <span className="flex items-center space-x-1">
+                                  <AlertCircle className="w-3.5 h-3.5" />
+                                  <span>Admin Review Required</span>
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-semibold text-teal-700 group-hover:translate-x-0.5 transition-transform">
+                                <span className="flex items-center space-x-1">
+                                  <PlayCircle className="w-3.5 h-3.5" />
+                                  <span>Watch Videos & Book Exam Slot</span>
+                                </span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </div>
+                            )}
                           </div>
                         );
                       })}
