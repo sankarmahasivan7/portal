@@ -1035,3 +1035,260 @@ export async function markBulkAttendance(req: AuthRequest, res: Response) {
   }
 }
 
+/**
+ * TIMING-CENTRIC LAB ATTENDANCE ROSTER
+ * Retrieves all registered students across ALL courses for a given slot timing and/or lab room.
+ * Staff sitting in a lab at a given timing sees all students regardless of course!
+ */
+export async function getAttendanceByTiming(req: AuthRequest, res: Response) {
+  try {
+    const { timeWindow, labName, search, status, languageId } = req.query;
+
+    // 1. Build slot match query
+    const slotQuery: any = { isActive: true };
+    if (timeWindow && timeWindow !== 'all') {
+      // Support matching partial or full timeWindow string (e.g. "09:15 to 10:15")
+      slotQuery.timeWindow = { $regex: new RegExp(escapeRegex(timeWindow as string), 'i') };
+    }
+    if (labName && labName !== 'all') {
+      slotQuery.labName = labName;
+    }
+
+    // Find matching slots
+    const matchingSlots = await ExaminationSlot.find(slotQuery).select('_id examinationId labName timeWindow startTime endTime capacity');
+    const slotIds = matchingSlots.map((s) => s._id);
+
+    // 2. Build registration query
+    const regQuery: any = {
+      slotId: { $in: slotIds },
+      status: { $ne: 'cancelled' }
+    };
+
+    if (status && status !== 'all') {
+      if (status === 'pending') {
+        regQuery.$or = [{ attendanceStatus: 'pending' }, { attendanceStatus: { $exists: false } }, { attendanceStatus: null }];
+      } else {
+        regQuery.attendanceStatus = status;
+      }
+    }
+
+    const registrations = await ExaminationRegistration.find(regQuery)
+      .populate('studentId', 'firstName lastName email studentId department year section')
+      .populate({
+        path: 'examinationId',
+        select: 'title levelNumber languageId passingPercentage durationMinutes',
+        populate: { path: 'languageId', select: 'name slug' }
+      })
+      .populate('slotId', 'slotName labName timeWindow startTime endTime capacity')
+      .populate('markedBy', 'firstName lastName email role')
+      .sort({ registeredAt: 1 });
+
+    // Filter by language / course if requested
+    let filtered = registrations;
+    if (languageId && languageId !== 'all') {
+      filtered = filtered.filter((r: any) => {
+        const lang = r.examinationId?.languageId;
+        return lang && (lang._id?.toString() === languageId || lang.slug === languageId);
+      });
+    }
+
+    // Filter by search query if requested
+    if (search) {
+      const q = (search as string).toLowerCase();
+      filtered = filtered.filter((r: any) => {
+        const student = r.studentId;
+        const exam = r.examinationId;
+        const name = `${student?.firstName || ''} ${student?.lastName || ''}`.toLowerCase();
+        const sId = (student?.studentId || '').toLowerCase();
+        const email = (student?.email || '').toLowerCase();
+        const courseTitle = (exam?.title || '').toLowerCase();
+        const langName = (exam?.languageId?.name || '').toLowerCase();
+        return name.includes(q) || sId.includes(q) || email.includes(q) || courseTitle.includes(q) || langName.includes(q);
+      });
+    }
+
+    // Summary counts
+    const totalRegistered = filtered.length;
+    const presentCount = filtered.filter((r) => r.attendanceStatus === 'present').length;
+    const absentCount = filtered.filter((r) => r.attendanceStatus === 'absent').length;
+    const pendingCount = filtered.filter((r) => !r.attendanceStatus || r.attendanceStatus === 'pending').length;
+
+    // Distinct time windows from active slots
+    const allSlots = await ExaminationSlot.find({ isActive: true }).select('timeWindow labName registeredCount');
+    const timeWindowSet = new Set<string>();
+    const labSet = new Set<string>();
+    allSlots.forEach((s) => {
+      if (s.timeWindow) timeWindowSet.add(s.timeWindow);
+      if (s.labName) labSet.add(s.labName);
+    });
+
+    const standardTimeWindows = [
+      '09:15 to 10:15',
+      '10:25 to 11:25',
+      '11:35 to 12:35',
+      '1:30 to 2:30 (13:30 - 14:30)',
+      '2:45 to 3:45 (14:45 - 15:45)'
+    ];
+
+    // If slots have other windows, append them
+    timeWindowSet.forEach((tw) => {
+      if (!standardTimeWindows.some((sw) => sw.includes(tw) || tw.includes(sw))) {
+        standardTimeWindows.push(tw);
+      }
+    });
+
+    const students = filtered.map((r: any) => ({
+      registrationId: r._id,
+      student: r.studentId,
+      course: {
+        id: r.examinationId?._id,
+        title: r.examinationId?.title,
+        levelNumber: r.examinationId?.levelNumber,
+        languageName: r.examinationId?.languageId?.name || 'General',
+        languageSlug: r.examinationId?.languageId?.slug || 'c'
+      },
+      slot: {
+        id: r.slotId?._id,
+        slotName: r.slotId?.slotName,
+        labName: r.slotId?.labName,
+        timeWindow: r.slotId?.timeWindow,
+        startTime: r.slotId?.startTime,
+        endTime: r.slotId?.endTime,
+        capacity: r.slotId?.capacity
+      },
+      attendanceStatus: r.attendanceStatus || 'pending',
+      markedPresentAt: r.markedPresentAt,
+      markedBy: r.markedBy,
+      registeredAt: r.registeredAt
+    }));
+
+    return res.json({
+      success: true,
+      timeWindows: standardTimeWindows,
+      labs: ['Lab 1', 'Lab 2', 'Lab 3'],
+      summary: {
+        totalRegistered,
+        presentCount,
+        absentCount,
+        pendingCount
+      },
+      students
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch attendance by timing', error: error.message });
+  }
+}
+
+/**
+ * Directly mark attendance for a registration record by its registrationId
+ */
+export async function markAttendanceDirect(req: AuthRequest, res: Response) {
+  try {
+    const { registrationId, status } = req.body;
+
+    if (!['present', 'absent', 'pending'].includes(status)) {
+      return res.status(400).json({ success: false, message: "Status must be 'present', 'absent', or 'pending'" });
+    }
+
+    const registration = await ExaminationRegistration.findById(registrationId);
+    if (!registration) {
+      return res.status(404).json({ success: false, message: 'Registration record not found' });
+    }
+
+    registration.attendanceStatus = status;
+    if (status === 'present') {
+      registration.markedPresentAt = new Date();
+    } else if (status === 'pending') {
+      registration.markedPresentAt = undefined;
+    }
+    registration.markedBy = new mongoose.Types.ObjectId(req.userId);
+    await registration.save();
+
+    if (status === 'present') {
+      await Notification.create({
+        userId: registration.studentId,
+        title: 'Attendance Verified - Ready for Exam',
+        message: 'Staff has verified your attendance. You can now start your examination.',
+        type: 'attendance_verified'
+      });
+    }
+
+    await logAudit(
+      'EXAM_ATTENDANCE_MARKED',
+      { registrationId, studentId: registration.studentId, status, markedBy: req.userId },
+      req
+    );
+
+    return res.json({
+      success: true,
+      message: `Student marked as ${status}.`,
+      registration: {
+        registrationId: registration._id,
+        attendanceStatus: registration.attendanceStatus,
+        markedPresentAt: registration.markedPresentAt
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to update attendance', error: error.message });
+  }
+}
+
+/**
+ * Bulk mark multiple registrations as present or absent by registration IDs
+ */
+export async function markBulkAttendanceDirect(req: AuthRequest, res: Response) {
+  try {
+    const { registrationIds, status } = req.body;
+
+    if (!['present', 'absent'].includes(status)) {
+      return res.status(400).json({ success: false, message: "Status must be 'present' or 'absent'" });
+    }
+
+    if (!Array.isArray(registrationIds) || registrationIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'registrationIds array is required' });
+    }
+
+    const updateFields: any = {
+      attendanceStatus: status,
+      markedBy: new mongoose.Types.ObjectId(req.userId)
+    };
+    if (status === 'present') {
+      updateFields.markedPresentAt = new Date();
+    }
+
+    const registrations = await ExaminationRegistration.find({ _id: { $in: registrationIds } });
+
+    await ExaminationRegistration.updateMany(
+      { _id: { $in: registrationIds } },
+      { $set: updateFields }
+    );
+
+    if (status === 'present') {
+      const notifications = registrations.map((r) => ({
+        userId: r.studentId,
+        title: 'Attendance Verified - Ready for Exam',
+        message: 'Staff has verified your attendance. You can now start your examination.',
+        type: 'attendance_verified'
+      }));
+      await Notification.insertMany(notifications).catch(() => {});
+    }
+
+    await logAudit(
+      'EXAM_ATTENDANCE_BULK_MARKED',
+      { count: registrationIds.length, status, markedBy: req.userId },
+      req
+    );
+
+    return res.json({
+      success: true,
+      message: `Successfully marked ${registrationIds.length} students as ${status}.`
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to bulk update attendance', error: error.message });
+  }
+}
+
+function escapeRegex(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+

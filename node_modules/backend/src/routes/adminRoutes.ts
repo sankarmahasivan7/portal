@@ -21,6 +21,9 @@ import {
   getSlotAttendance,
   markStudentAttendance,
   markBulkAttendance,
+  getAttendanceByTiming,
+  markAttendanceDirect,
+  markBulkAttendanceDirect,
   getAdminResults,
   exportResultsCsv,
   getAuditLogs,
@@ -66,6 +69,9 @@ router.patch('/exams/:id/publish', requireRole(['admin', 'faculty']), togglePubl
 router.post('/exams/:id/slots', requireRole(['admin', 'controller']), addExamSlot);
 
 // Attendance & Hall Invigilation (Admin, Faculty, Controller)
+router.get('/attendance', requireRole(['admin', 'faculty', 'controller']), getAttendanceByTiming);
+router.post('/attendance/mark', requireRole(['admin', 'faculty', 'controller']), markAttendanceDirect);
+router.post('/attendance/bulk-mark', requireRole(['admin', 'faculty', 'controller']), markBulkAttendanceDirect);
 router.get('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty', 'controller']), getSlotAttendance);
 router.post('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty', 'controller']), markStudentAttendance);
 router.post('/exams/:id/slots/:slotId/attendance/bulk', requireRole(['admin', 'faculty', 'controller']), markBulkAttendance);

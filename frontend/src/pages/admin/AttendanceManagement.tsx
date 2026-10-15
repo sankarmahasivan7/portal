@@ -8,13 +8,12 @@ import {
   Clock,
   RefreshCw,
   Search,
-  Filter,
   CheckCheck,
   Building,
-  GraduationCap,
+  ArrowLeft,
   Calendar,
-  AlertCircle,
-  ArrowLeft
+  Layers,
+  Filter
 } from 'lucide-react';
 
 interface StudentItem {
@@ -29,6 +28,22 @@ interface StudentItem {
     year?: number;
     section?: string;
   };
+  course: {
+    id: string;
+    title: string;
+    levelNumber: number;
+    languageName: string;
+    languageSlug: string;
+  };
+  slot: {
+    id: string;
+    slotName: string;
+    labName: string;
+    timeWindow: string;
+    startTime: string;
+    endTime: string;
+    capacity: number;
+  };
   attendanceStatus: 'pending' | 'present' | 'absent';
   markedPresentAt?: string;
   markedBy?: {
@@ -39,116 +54,110 @@ interface StudentItem {
   registeredAt: string;
 }
 
+const STANDARD_TIMINGS = [
+  '09:15 to 10:15',
+  '10:25 to 11:25',
+  '11:35 to 12:35',
+  '1:30 to 2:30 (13:30 - 14:30)',
+  '2:45 to 3:45 (14:45 - 15:45)'
+];
+
+const LAB_OPTIONS = ['all', 'Lab 1', 'Lab 2', 'Lab 3'];
+
 export const AttendanceManagement: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialExamId = searchParams.get('examId') || '';
-  const initialSlotId = searchParams.get('slotId') || '';
+  const initialTiming = searchParams.get('timing') || '09:15 to 10:15';
+  const initialLab = searchParams.get('lab') || 'all';
 
-  const [exams, setExams] = useState<any[]>([]);
-  const [selectedExamId, setSelectedExamId] = useState<string>(initialExamId);
-  const [selectedSlotId, setSelectedSlotId] = useState<string>(initialSlotId);
-  const [slotData, setSlotData] = useState<any | null>(null);
+  const [selectedTiming, setSelectedTiming] = useState<string>(initialTiming);
+  const [selectedLab, setSelectedLab] = useState<string>(initialLab);
+  const [timeWindows, setTimeWindows] = useState<string[]>(STANDARD_TIMINGS);
+
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [summary, setSummary] = useState<any>({
     totalRegistered: 0,
     presentCount: 0,
     absentCount: 0,
-    pendingCount: 0,
-    capacity: 30
+    pendingCount: 0
   });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'present' | 'absent'>('all');
+  const [courseFilter, setCourseFilter] = useState<string>('all');
+  const [availableCourses, setAvailableCourses] = useState<{ id: string; name: string }[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  // 1. Fetch all exams for dropdown
-  useEffect(() => {
-    async function fetchExams() {
-      try {
-        const res = await api.get('/admin/exams');
-        if (res.data.success) {
-          setExams(res.data.exams);
-          // Default to first published exam or first exam if none selected
-          if (!selectedExamId && res.data.exams.length > 0) {
-            const pub = res.data.exams.find((e: any) => e.isPublished) || res.data.exams[0];
-            setSelectedExamId(pub._id);
-            if (pub.slots && pub.slots.length > 0 && !selectedSlotId) {
-              setSelectedSlotId(pub.slots[0]._id);
-            }
-          }
-        }
-      } catch (err: any) {
-        console.error('Failed to load exams', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchExams();
-  }, []);
-
-  // When selected exam changes, update slots or default slot
-  useEffect(() => {
-    if (!selectedExamId || exams.length === 0) return;
-    const currentExam = exams.find((e) => e._id === selectedExamId);
-    if (currentExam && currentExam.slots && currentExam.slots.length > 0) {
-      // If current slot isn't in this exam, pick first slot
-      const hasSlot = currentExam.slots.some((s: any) => s._id === selectedSlotId);
-      if (!hasSlot) {
-        setSelectedSlotId(currentExam.slots[0]._id);
-      }
-    }
-  }, [selectedExamId, exams]);
-
-  // 2. Fetch slot attendance data
+  // 1. Fetch attendance sorted & filtered by timing and lab
   const fetchAttendance = async (silent = false) => {
-    if (!selectedExamId || !selectedSlotId) return;
     try {
       if (!silent) setIsRefreshing(true);
-      const res = await api.get(`/admin/exams/${selectedExamId}/slots/${selectedSlotId}/attendance`);
+      const res = await api.get('/admin/attendance', {
+        params: {
+          timeWindow: selectedTiming,
+          labName: selectedLab,
+          status: statusFilter !== 'all' ? statusFilter : undefined
+        }
+      });
+
       if (res.data.success) {
-        setSlotData(res.data.slot);
         setStudents(res.data.students || []);
         setSummary(res.data.summary);
+        if (res.data.timeWindows && res.data.timeWindows.length > 0) {
+          setTimeWindows(res.data.timeWindows);
+        }
+
+        // Collect distinct courses present in this slot timing
+        const courseMap = new Map<string, string>();
+        (res.data.students || []).forEach((item: StudentItem) => {
+          if (item.course && item.course.languageName) {
+            courseMap.set(item.course.languageName, item.course.languageName);
+          }
+        });
+        const coursesList = Array.from(courseMap.keys()).map((name) => ({ id: name, name }));
+        setAvailableCourses(coursesList);
       }
     } catch (err: any) {
-      console.error('Failed to fetch slot attendance', err);
+      console.error('Failed to fetch attendance roster', err);
     } finally {
-      if (!silent) setIsRefreshing(false);
+      if (!silent) {
+        setIsRefreshing(false);
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    if (selectedExamId && selectedSlotId) {
-      setSearchParams({ examId: selectedExamId, slotId: selectedSlotId });
-      fetchAttendance();
-    }
-  }, [selectedExamId, selectedSlotId]);
+    setSearchParams({ timing: selectedTiming, lab: selectedLab });
+    fetchAttendance();
+  }, [selectedTiming, selectedLab, statusFilter]);
 
-  // Auto-refresh poll every 5 seconds for real-time arrivals
+  // Auto-refresh poll every 5 seconds for real-time arrivals in the lab
   useEffect(() => {
-    if (!autoRefresh || !selectedExamId || !selectedSlotId) return;
+    if (!autoRefresh) return;
     const interval = setInterval(() => {
       fetchAttendance(true);
     }, 5000);
     return () => clearInterval(interval);
-  }, [autoRefresh, selectedExamId, selectedSlotId]);
+  }, [autoRefresh, selectedTiming, selectedLab, statusFilter]);
 
   // Mark single student attendance
-  const handleMarkAttendance = async (studentId: string, status: 'present' | 'absent' | 'pending') => {
+  const handleMarkAttendance = async (registrationId: string, status: 'present' | 'absent' | 'pending') => {
     try {
-      setActionInProgress(studentId);
-      const res = await api.post(`/admin/exams/${selectedExamId}/slots/${selectedSlotId}/attendance`, {
-        studentId,
+      setActionInProgress(registrationId);
+      const res = await api.post('/admin/attendance/mark', {
+        registrationId,
         status
       });
+
       if (res.data.success) {
-        // Update local state smoothly
+        // Update state locally for instantaneous responsive feedback
         setStudents((prev) =>
           prev.map((s) =>
-            s.student._id === studentId
+            s.registrationId === registrationId
               ? {
                   ...s,
                   attendanceStatus: status,
@@ -157,7 +166,6 @@ export const AttendanceManagement: React.FC = () => {
               : s
           )
         );
-        // Refresh summary
         fetchAttendance(true);
       }
     } catch (err: any) {
@@ -167,25 +175,26 @@ export const AttendanceManagement: React.FC = () => {
     }
   };
 
-  // Mark all pending as present
+  // Mark all pending as present for the currently viewed slot timing
   const handleMarkAllPresent = async () => {
-    const pendingIds = students
+    const pendingIds = filteredStudents
       .filter((s) => s.attendanceStatus !== 'present')
-      .map((s) => s.student._id);
+      .map((s) => s.registrationId);
 
     if (pendingIds.length === 0) {
-      alert('All registered students are already marked Present.');
+      alert('All registered students in this view are already marked Present.');
       return;
     }
 
-    if (!window.confirm(`Mark all ${pendingIds.length} students as Present in ${slotData?.labName || 'this lab'}?`)) {
+    const labLabel = selectedLab === 'all' ? 'All Labs' : selectedLab;
+    if (!window.confirm(`Mark all ${pendingIds.length} students as Present for ${selectedTiming} (${labLabel})?`)) {
       return;
     }
 
     try {
       setIsRefreshing(true);
-      const res = await api.post(`/admin/exams/${selectedExamId}/slots/${selectedSlotId}/attendance/bulk`, {
-        studentIds: pendingIds,
+      const res = await api.post('/admin/attendance/bulk-mark', {
+        registrationIds: pendingIds,
         status: 'present'
       });
       if (res.data.success) {
@@ -198,24 +207,25 @@ export const AttendanceManagement: React.FC = () => {
     }
   };
 
-  const selectedExam = exams.find((e) => e._id === selectedExamId);
-  const examSlots = selectedExam?.slots || [];
-
-  // Filter students by search and status
+  // Filter students by search and optional course
   const filteredStudents = students.filter((s) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      (s.student.studentId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      `${s.student.firstName} ${s.student.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.student.email || '').toLowerCase().includes(searchQuery.toLowerCase());
+      !searchQuery ||
+      (s.student?.studentId || '').toLowerCase().includes(q) ||
+      `${s.student?.firstName || ''} ${s.student?.lastName || ''}`.toLowerCase().includes(q) ||
+      (s.student?.email || '').toLowerCase().includes(q) ||
+      (s.course?.title || '').toLowerCase().includes(q) ||
+      (s.course?.languageName || '').toLowerCase().includes(q);
 
-    const matchesStatus =
-      statusFilter === 'all' ? true : s.attendanceStatus === statusFilter;
+    const matchesCourse =
+      courseFilter === 'all' || s.course?.languageName === courseFilter;
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesCourse;
   });
 
   return (
-    <div className="bg-slate-50 min-h-screen py-8 text-slate-800">
+    <div className="bg-slate-50 min-h-screen py-8 text-slate-800 font-sans">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         {/* Header Breadcrumb & Controls */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -226,13 +236,13 @@ export const AttendanceManagement: React.FC = () => {
                 <span>Exams</span>
               </Link>
               <span>/</span>
-              <span className="text-teal-700 font-bold">Hall Invigilation & Attendance Gate</span>
+              <span className="text-teal-700 font-bold">Slot Timing Attendance Gate</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               Lab Attendance Management
             </h1>
             <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-              Verify student physical arrival in exam labs. Only students marked <strong>Present</strong> are permitted to start the test.
+              Filtered strictly by <strong>Slot Timings</strong>. Multiple students taking different courses in the same lab timing appear together on this roster.
             </p>
           </div>
 
@@ -253,7 +263,7 @@ export const AttendanceManagement: React.FC = () => {
             <button
               onClick={() => fetchAttendance()}
               disabled={isRefreshing}
-              className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition flex items-center space-x-1.5 shadow-xs"
+              className="px-3.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition flex items-center space-x-1.5 shadow-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-teal-600' : ''}`} />
               <span>Refresh</span>
@@ -261,68 +271,90 @@ export const AttendanceManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Selection Bar: Select Exam & Slot */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Exam Selector */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Select Examination:
+        {/* Primary Timing Selector Card */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-5">
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <label className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-teal-600" />
+                <span>Select Examination Slot Timing (Sorted By Timing Window)</span>
               </label>
-              <select
-                value={selectedExamId}
-                onChange={(e) => setSelectedExamId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                {exams.map((exam) => (
-                  <option key={exam._id} value={exam._id}>
-                    {exam.title} (Level {exam.levelNumber} - {exam.languageId?.name || 'General'})
-                  </option>
-                ))}
-              </select>
+              <span className="text-[11px] text-teal-700 font-semibold bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
+                Active Slot: {selectedTiming}
+              </span>
             </div>
 
-            {/* Slot Selector */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Select Examination Slot & Lab:
-              </label>
-              <select
-                value={selectedSlotId}
-                onChange={(e) => setSelectedSlotId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                {examSlots.map((slot: any) => (
-                  <option key={slot._id} value={slot._id}>
-                    {slot.timeWindow || slot.slotName} — {slot.labName || 'Lab'} ({slot.registeredCount || 0}/{slot.capacity || 30} Students)
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Quick Slot Pills */}
-          {examSlots.length > 0 && (
-            <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-2">
-              <span className="text-xs text-slate-400 font-semibold self-center mr-1">Quick Select:</span>
-              {examSlots.map((s: any) => {
-                const isSelected = s._id === selectedSlotId;
+            {/* Timing Pills Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+              {timeWindows.map((tw) => {
+                const isSelected = selectedTiming.startsWith(tw.split(' ')[0]);
                 return (
                   <button
-                    key={s._id}
-                    onClick={() => setSelectedSlotId(s._id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                    key={tw}
+                    onClick={() => setSelectedTiming(tw)}
+                    className={`p-3 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center space-y-1 border ${
                       isSelected
-                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-md scale-[1.02]'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
                     }`}
                   >
-                    {s.timeWindow} ({s.labName})
+                    <span className="text-[11px] uppercase tracking-wider opacity-80">Window</span>
+                    <span className="text-xs sm:text-sm font-extrabold truncate w-full text-center">
+                      {tw}
+                    </span>
                   </button>
                 );
               })}
             </div>
-          )}
+          </div>
+
+          {/* Secondary Filter: Lab & Optional Course */}
+          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Lab Filter */}
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+                <Building className="w-3.5 h-3.5 text-slate-500" />
+                <span>Assigned Lab:</span>
+              </span>
+              <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
+                {LAB_OPTIONS.map((lab) => {
+                  const isSelected = selectedLab === lab;
+                  return (
+                    <button
+                      key={lab}
+                      onClick={() => setSelectedLab(lab)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition ${
+                        isSelected
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {lab === 'all' ? 'All Labs' : lab}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Optional Course Filter */}
+            {availableCourses.length > 1 && (
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold text-slate-600">Course Filter:</span>
+                <select
+                  value={courseFilter}
+                  onChange={(e) => setCourseFilter(e.target.value)}
+                  className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="all">All Courses in this Timing</option>
+                  {availableCourses.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Real-time Summary Cards */}
@@ -334,7 +366,8 @@ export const AttendanceManagement: React.FC = () => {
             <div>
               <span className="text-slate-400 text-xs font-semibold block">Total Registered</span>
               <span className="text-xl font-extrabold text-slate-900">
-                {summary.totalRegistered} <span className="text-xs text-slate-400 font-medium">/ {summary.capacity} cap</span>
+                {summary.totalRegistered}{' '}
+                <span className="text-xs text-slate-400 font-medium">students</span>
               </span>
             </div>
           </div>
@@ -370,7 +403,7 @@ export const AttendanceManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Student Table & Filters */}
+        {/* Student Table & Search */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           {/* Table Toolbar */}
           <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/50">
@@ -379,10 +412,10 @@ export const AttendanceManagement: React.FC = () => {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Search Roll No or Name..."
+                  placeholder="Search Roll No, Name, or Course..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 w-56 sm:w-64"
+                  className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 w-56 sm:w-72"
                 />
               </div>
 
@@ -423,8 +456,8 @@ export const AttendanceManagement: React.FC = () => {
                 <tr>
                   <th className="py-3 px-4">Student</th>
                   <th className="py-3 px-4">Roll Number</th>
-                  <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4">Registered At</th>
+                  <th className="py-3 px-4">Registered Course & Level</th>
+                  <th className="py-3 px-4">Lab & Timing</th>
                   <th className="py-3 px-4">Attendance Status</th>
                   <th className="py-3 px-4 text-right">Actions (One-Click)</th>
                 </tr>
@@ -438,8 +471,8 @@ export const AttendanceManagement: React.FC = () => {
                         <span className="font-semibold text-slate-600">No registered students found</span>
                         <span className="text-[11px] text-slate-400">
                           {searchQuery
-                            ? 'Try clearing your search term.'
-                            : 'No students have booked this slot yet.'}
+                            ? 'No students matching your search criteria.'
+                            : `No students registered for slot timing ${selectedTiming}${selectedLab !== 'all' ? ` in ${selectedLab}` : ''}.`}
                         </span>
                       </div>
                     </td>
@@ -449,7 +482,7 @@ export const AttendanceManagement: React.FC = () => {
                     const isPending = !item.attendanceStatus || item.attendanceStatus === 'pending';
                     const isPresent = item.attendanceStatus === 'present';
                     const isAbsent = item.attendanceStatus === 'absent';
-                    const isUpdating = actionInProgress === item.student._id;
+                    const isUpdating = actionInProgress === item.registrationId;
 
                     return (
                       <tr
@@ -461,29 +494,32 @@ export const AttendanceManagement: React.FC = () => {
                         <td className="py-3.5 px-4 font-semibold text-slate-900">
                           <div>
                             <span>
-                              {item.student.firstName} {item.student.lastName}
+                              {item.student?.firstName} {item.student?.lastName}
                             </span>
                             <span className="text-[11px] text-slate-400 font-normal block">
-                              {item.student.email}
+                              {item.student?.email}
                             </span>
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4 font-mono font-bold text-slate-700">
                           <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200">
-                            {item.student.studentId || 'N/A'}
+                            {item.student?.studentId || 'N/A'}
                           </span>
                         </td>
 
-                        <td className="py-3.5 px-4 text-slate-600">
-                          {item.student.department || 'Computer Science'}
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 font-semibold text-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                            <span>
+                              {item.course?.languageName} — Level {item.course?.levelNumber}
+                            </span>
+                          </span>
                         </td>
 
-                        <td className="py-3.5 px-4 text-slate-500">
-                          {new Date(item.registeredAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                        <td className="py-3.5 px-4 text-slate-700">
+                          <div className="font-semibold">{item.slot?.labName || 'Lab'}</div>
+                          <div className="text-[11px] text-slate-400">{item.slot?.timeWindow}</div>
                         </td>
 
                         <td className="py-3.5 px-4">
@@ -511,14 +547,14 @@ export const AttendanceManagement: React.FC = () => {
                           <div className="flex items-center justify-end space-x-1.5">
                             {/* Mark Present Button */}
                             <button
-                              onClick={() => handleMarkAttendance(item.student._id, 'present')}
+                              onClick={() => handleMarkAttendance(item.registrationId, 'present')}
                               disabled={isUpdating || isPresent}
                               className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ${
                                 isPresent
                                   ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 opacity-60 cursor-default'
                                   : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
                               }`}
-                              title="Mark Present (Unlocks Test for Student)"
+                              title="Mark Present (Unlocks Examination for Student)"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>Present</span>
@@ -526,7 +562,7 @@ export const AttendanceManagement: React.FC = () => {
 
                             {/* Mark Absent Button */}
                             <button
-                              onClick={() => handleMarkAttendance(item.student._id, 'absent')}
+                              onClick={() => handleMarkAttendance(item.registrationId, 'absent')}
                               disabled={isUpdating || isAbsent}
                               className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ${
                                 isAbsent
@@ -539,10 +575,10 @@ export const AttendanceManagement: React.FC = () => {
                               <span>Absent</span>
                             </button>
 
-                            {/* Reset Button (only if already marked) */}
+                            {/* Reset Button */}
                             {!isPending && (
                               <button
-                                onClick={() => handleMarkAttendance(item.student._id, 'pending')}
+                                onClick={() => handleMarkAttendance(item.registrationId, 'pending')}
                                 disabled={isUpdating}
                                 className="px-2 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
                                 title="Reset to Pending"
