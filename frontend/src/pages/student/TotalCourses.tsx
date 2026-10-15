@@ -1,19 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-import {
-  BookOpen,
-  CheckCircle2,
-  Lock,
-  Unlock,
-  Award,
-  ChevronRight,
-  Sparkles,
-  ArrowRight,
-  Clock,
-  Layers,
-  GraduationCap
-} from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 interface LevelInfo {
   levelNumber: number;
@@ -37,8 +25,6 @@ interface CourseItem {
 
 export const TotalCourses: React.FC = () => {
   const [courses, setCourses] = useState<CourseItem[]>([]);
-  const [totalLevelsAcrossCourses, setTotalLevelsAcrossCourses] = useState(0);
-  const [totalLevelsCompleted, setTotalLevelsCompleted] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -50,8 +36,6 @@ export const TotalCourses: React.FC = () => {
         const res = await api.get('/student/total-courses');
         if (res.data.success) {
           setCourses(res.data.courses);
-          setTotalLevelsAcrossCourses(res.data.totalLevelsAcrossCourses);
-          setTotalLevelsCompleted(res.data.totalLevelsCompleted);
         }
       } catch (err: any) {
         setError(err.response?.data?.message || 'Failed to load courses.');
@@ -87,76 +71,19 @@ export const TotalCourses: React.FC = () => {
 
   return (
     <div className="bg-slate-50 min-h-screen py-8 text-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        {/* Header Banner */}
-        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold uppercase tracking-wider mb-3">
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Collegiate Curriculum Tracks</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Total Courses & Levels
-            </h1>
-            <p className="text-slate-500 mt-1 max-w-2xl text-sm sm:text-base">
-              Explore all language tracks. Click any course (e.g. C Course) to view its levels one by one, topics covered, attempt history, and register for courses.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link
-              to="/student/my-courses"
-              className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm transition shadow-sm hover:shadow flex items-center space-x-2"
-            >
-              <BookOpen className="w-4 h-4" />
-              <span>Go to My Courses</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* Aggregate Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600">
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900">{courses.length}</div>
-              <div className="text-xs font-medium text-slate-500">Available Courses</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
-              <Layers className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900">{totalLevelsAcrossCourses}</div>
-              <div className="text-xs font-medium text-slate-500">Total Curriculum Levels</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
-              <Award className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900">
-                {totalLevelsCompleted} <span className="text-sm font-normal text-slate-400">/ {totalLevelsAcrossCourses}</span>
-              </div>
-              <div className="text-xs font-medium text-slate-500">Levels Completed Across Courses</div>
-            </div>
-          </div>
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         {/* Courses Grid */}
         <div className="space-y-6">
-          <h2 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
-            <span>All Courses & Curriculum Tracks</span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-              Click a course to view levels & topics
-            </span>
-          </h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                Total Courses
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Click any course to view levels, topics, and register for courses.
+              </p>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {courses.map((course) => {
