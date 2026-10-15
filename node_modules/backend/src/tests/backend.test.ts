@@ -206,7 +206,46 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(regRes.body.message).toContain('previous day at 9:00 PM');
     });
 
-    test('Starting Level 1 exam creates authoritative session with deadline', async () => {
+    test('Starting exam before staff marks present in lab is rejected with 403', async () => {
+      const res = await request(app)
+        .post(`/api/exams/${cExamLevel1Id}/start-session`)
+        .set('Authorization', `Bearer ${student1Token}`);
+      expect(res.status).toBe(403);
+      expect(res.body.attendancePending).toBe(true);
+      expect(res.body.message).toContain('Attendance verification required');
+    });
+
+    test('Staff views slot attendance list and marks student present', async () => {
+      // 1. Staff views attendance list
+      const listRes = await request(app)
+        .get(`/api/admin/exams/${cExamLevel1Id}/slots/${cSlotLevel1Id}/attendance`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.success).toBe(true);
+      expect(listRes.body.summary.totalRegistered).toBeGreaterThan(0);
+      const student1Record = listRes.body.students.find((s: any) => s.student._id === student1Id);
+      expect(student1Record).toBeDefined();
+      expect(student1Record.attendanceStatus).toBe('pending');
+
+      // 2. Staff marks student present
+      const markRes = await request(app)
+        .post(`/api/admin/exams/${cExamLevel1Id}/slots/${cSlotLevel1Id}/attendance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ studentId: student1Id, status: 'present' });
+      expect(markRes.status).toBe(200);
+      expect(markRes.body.success).toBe(true);
+      expect(markRes.body.registration.attendanceStatus).toBe('present');
+
+      // 3. Student can poll attendance-status endpoint
+      const pollRes = await request(app)
+        .get(`/api/exams/${cExamLevel1Id}/attendance-status`)
+        .set('Authorization', `Bearer ${student1Token}`);
+      expect(pollRes.status).toBe(200);
+      expect(pollRes.body.hasRegistration).toBe(true);
+      expect(pollRes.body.attendanceStatus).toBe('present');
+    });
+
+    test('Starting Level 1 exam creates authoritative session once marked present', async () => {
       const res = await request(app)
         .post(`/api/exams/${cExamLevel1Id}/start-session`)
         .set('Authorization', `Bearer ${student1Token}`);

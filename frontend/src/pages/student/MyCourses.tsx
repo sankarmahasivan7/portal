@@ -14,7 +14,8 @@ import {
   Sparkles,
   Layers,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 
 interface RegisteredSlot {
@@ -37,6 +38,8 @@ interface RegisteredExam {
   examDate: string;
   durationMinutes: number;
   status: string;
+  attendanceStatus?: 'pending' | 'present' | 'absent';
+  markedPresentAt?: string;
   slot: RegisteredSlot | null;
 }
 
@@ -211,6 +214,27 @@ export const MyCourses: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Attendance Gate Status */}
+                  <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <span className="text-slate-500 font-medium">Attendance Gate:</span>
+                    {reg.attendanceStatus === 'present' ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Verified Present (Ready)</span>
+                      </span>
+                    ) : reg.attendanceStatus === 'absent' ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                        <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Marked Absent</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Pending Lab Verification</span>
+                      </span>
+                    )}
+                  </div>
+
                   {/* Action Buttons */}
                   <div className="flex items-center justify-between pt-2">
                     <button
@@ -227,9 +251,15 @@ export const MyCourses: React.FC = () => {
 
                     <Link
                       to={`/exam/${reg.examId}`}
-                      className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
+                      className={`px-4 py-2 rounded-xl font-semibold text-xs transition flex items-center space-x-1.5 shadow-xs ${
+                        reg.attendanceStatus === 'present'
+                          ? 'bg-teal-600 hover:bg-teal-700 text-white'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white'
+                      }`}
                     >
-                      <span>Enter Exam Arena</span>
+                      <span>
+                        {reg.attendanceStatus === 'present' ? 'Start Test' : 'Enter Gate'}
+                      </span>
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>

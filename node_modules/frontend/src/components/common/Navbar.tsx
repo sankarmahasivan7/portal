@@ -15,7 +15,8 @@ import {
   Menu,
   X,
   Layers,
-  GraduationCap
+  GraduationCap,
+  UserCheck
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -136,6 +137,17 @@ export const Navbar: React.FC = () => {
                   >
                     <Calendar className="w-4 h-4" />
                     <span>Exams</span>
+                  </Link>
+                  <Link
+                    to="/admin/attendance"
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
+                      isActive('/admin/attendance')
+                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>Attendance</span>
                   </Link>
                   <Link
                     to="/admin/results"
@@ -264,6 +276,13 @@ export const Navbar: React.FC = () => {
                 className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
               >
                 Exams
+              </Link>
+              <Link
+                to="/admin/attendance"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              >
+                Attendance Gate
               </Link>
               <Link
                 to="/admin/results"

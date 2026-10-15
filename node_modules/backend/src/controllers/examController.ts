@@ -323,6 +323,20 @@ export async function startExaminationSession(req: AuthRequest, res: Response) {
       return res.status(400).json({ success: false, message: 'Slot configuration error.' });
     }
 
+    // Require staff-verified attendance in the lab
+    if (registration.attendanceStatus !== 'present') {
+      const labName = slot?.labName || 'your assigned lab';
+      return res.status(403).json({
+        success: false,
+        attendancePending: true,
+        attendanceStatus: registration.attendanceStatus,
+        message:
+          registration.attendanceStatus === 'absent'
+            ? 'You have been marked absent by staff for this slot.'
+            : `Attendance verification required. Please report to staff in ${labName} to be marked Present before starting the test.`
+      });
+    }
+
     // Verify time window
     const slotStartTime = new Date(slot.startTime).getTime();
     const slotEndTime = new Date(slot.endTime).getTime();
@@ -795,5 +809,48 @@ export async function getSessionResult(req: AuthRequest, res: Response) {
     return res.json({ success: true, result });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Result lookup error', error: error.message });
+  }
+}
+
+export async function getExamAttendanceStatus(req: AuthRequest, res: Response) {
+  try {
+    const { id: examinationId } = req.params;
+    const studentId = req.userId!;
+
+    const registration = await ExaminationRegistration.findOne({
+      examinationId,
+      studentId,
+      status: 'registered'
+    }).populate('slotId');
+
+    if (!registration) {
+      return res.json({
+        success: true,
+        hasRegistration: false,
+        attendanceStatus: 'none',
+        message: 'No active registration for this examination.'
+      });
+    }
+
+    const slot: any = registration.slotId;
+
+    return res.json({
+      success: true,
+      hasRegistration: true,
+      attendanceStatus: registration.attendanceStatus,
+      markedPresentAt: registration.markedPresentAt,
+      slot: slot
+        ? {
+            id: slot._id,
+            slotName: slot.slotName,
+            labName: slot.labName,
+            timeWindow: slot.timeWindow,
+            startTime: slot.startTime,
+            endTime: slot.endTime
+          }
+        : null
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch attendance status', error: error.message });
   }
 }

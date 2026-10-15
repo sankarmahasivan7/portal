@@ -291,6 +291,8 @@ export async function getMyCourses(req: AuthRequest, res: Response) {
       examDate: reg.examinationId?.examDate,
       durationMinutes: reg.examinationId?.durationMinutes,
       status: reg.status,
+      attendanceStatus: reg.attendanceStatus || 'pending',
+      markedPresentAt: reg.markedPresentAt,
       slot: reg.slotId
         ? {
             slotId: reg.slotId._id,
@@ -470,6 +472,8 @@ export async function getLevelDetail(req: AuthRequest, res: Response) {
       registration: hasActiveRegistration
         ? {
             registrationId: existingRegistration!._id,
+            attendanceStatus: existingRegistration!.attendanceStatus || 'pending',
+            markedPresentAt: existingRegistration!.markedPresentAt,
             slot: existingRegistration!.slotId
           }
         : null,

@@ -7,6 +7,7 @@ export type NotificationType =
   | 'schedule_change'
   | 'result'
   | 'level_unlock'
+  | 'attendance_verified'
   | 'system';
 
 export interface INotification extends Document {
@@ -27,7 +28,7 @@ const NotificationSchema = new Schema<INotification>(
     message: { type: String, required: true },
     type: {
       type: String,
-      enum: ['registration', 'reminder', 'cancellation', 'schedule_change', 'result', 'level_unlock', 'system'],
+      enum: ['registration', 'reminder', 'cancellation', 'schedule_change', 'result', 'level_unlock', 'attendance_verified', 'system'],
       default: 'system'
     },
     metadata: { type: Schema.Types.Mixed },

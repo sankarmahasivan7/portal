@@ -13,6 +13,7 @@ import { ExaminationSlot } from '../models/ExaminationSlot';
 import { ExaminationRegistration } from '../models/ExaminationRegistration';
 import { ExaminationResult } from '../models/ExaminationResult';
 import { Submission } from '../models/Submission';
+import { Notification } from '../models/Notification';
 import { AuditLog } from '../models/AuditLog';
 import { PlatformConfiguration } from '../models/PlatformConfiguration';
 import { checkWorkerHealth } from '../services/ExecutionClient';
@@ -827,6 +828,210 @@ export async function downloadSebConfig(_req: Request, res: Response) {
     return res.send(sebXml);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'SEB config generation error', error: error.message });
+  }
+}
+
+/**
+ * ATTENDANCE & HALL INVIGILATION
+ * Retrieves all registered students for a specific exam slot, their attendance status,
+ * student profile info, and slot capacity summary.
+ */
+export async function getSlotAttendance(req: AuthRequest, res: Response) {
+  try {
+    const { id: examinationId, slotId } = req.params;
+
+    const [exam, slot] = await Promise.all([
+      Examination.findById(examinationId).populate('languageId', 'name slug'),
+      ExaminationSlot.findById(slotId)
+    ]);
+
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Examination not found' });
+    }
+    if (!slot) {
+      return res.status(404).json({ success: false, message: 'Examination slot not found' });
+    }
+
+    const registrations = await ExaminationRegistration.find({
+      examinationId,
+      slotId,
+      status: { $ne: 'cancelled' }
+    })
+      .populate('studentId', 'firstName lastName email studentId department year section')
+      .populate('markedBy', 'firstName lastName email role')
+      .sort({ registeredAt: 1 });
+
+    const totalRegistered = registrations.length;
+    const presentCount = registrations.filter((r) => r.attendanceStatus === 'present').length;
+    const absentCount = registrations.filter((r) => r.attendanceStatus === 'absent').length;
+    const pendingCount = registrations.filter((r) => !r.attendanceStatus || r.attendanceStatus === 'pending').length;
+
+    return res.json({
+      success: true,
+      exam: {
+        id: exam._id,
+        title: exam.title,
+        levelNumber: exam.levelNumber,
+        language: exam.languageId
+      },
+      slot: {
+        id: slot._id,
+        slotName: slot.slotName,
+        labName: slot.labName,
+        timeWindow: slot.timeWindow,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        capacity: slot.capacity,
+        registeredCount: slot.registeredCount
+      },
+      summary: {
+        totalRegistered,
+        presentCount,
+        absentCount,
+        pendingCount,
+        capacity: slot.capacity,
+        availableSeats: Math.max(0, slot.capacity - totalRegistered)
+      },
+      students: registrations.map((r: any) => ({
+        registrationId: r._id,
+        student: r.studentId,
+        attendanceStatus: r.attendanceStatus || 'pending',
+        markedPresentAt: r.markedPresentAt,
+        markedBy: r.markedBy,
+        registeredAt: r.registeredAt
+      }))
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch slot attendance', error: error.message });
+  }
+}
+
+/**
+ * Invigilator marks an individual student as Present, Absent, or Pending.
+ * Only when marked Present can the student attend/take the test.
+ */
+export async function markStudentAttendance(req: AuthRequest, res: Response) {
+  try {
+    const { id: examinationId, slotId } = req.params;
+    const { studentId, status } = req.body;
+
+    if (!['present', 'absent', 'pending'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be 'present', 'absent', or 'pending'"
+      });
+    }
+
+    const registration = await ExaminationRegistration.findOne({
+      examinationId,
+      slotId,
+      studentId,
+      status: { $ne: 'cancelled' }
+    });
+
+    if (!registration) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active registration found for this student in this slot.'
+      });
+    }
+
+    registration.attendanceStatus = status;
+    if (status === 'present') {
+      registration.markedPresentAt = new Date();
+    } else if (status === 'pending') {
+      registration.markedPresentAt = undefined;
+    }
+    registration.markedBy = new mongoose.Types.ObjectId(req.userId);
+    await registration.save();
+
+    if (status === 'present') {
+      await Notification.create({
+        userId: studentId,
+        title: 'Attendance Verified - Ready for Exam',
+        message: 'Staff has verified your attendance. You can now start your examination.',
+        type: 'attendance_verified'
+      });
+    }
+
+    await logAudit(
+      'EXAM_ATTENDANCE_MARKED',
+      { examinationId, slotId, studentId, status, markedBy: req.userId },
+      req
+    );
+
+    return res.json({
+      success: true,
+      message: `Student marked as ${status}.`,
+      registration: {
+        registrationId: registration._id,
+        studentId: registration.studentId,
+        attendanceStatus: registration.attendanceStatus,
+        markedPresentAt: registration.markedPresentAt
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to update attendance', error: error.message });
+  }
+}
+
+/**
+ * Bulk marks multiple or all students in a slot as Present or Absent.
+ */
+export async function markBulkAttendance(req: AuthRequest, res: Response) {
+  try {
+    const { id: examinationId, slotId } = req.params;
+    const { studentIds, status } = req.body;
+
+    if (!['present', 'absent'].includes(status)) {
+      return res.status(400).json({ success: false, message: "Status must be 'present' or 'absent'" });
+    }
+
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'studentIds array is required' });
+    }
+
+    const updateFields: any = {
+      attendanceStatus: status,
+      markedBy: new mongoose.Types.ObjectId(req.userId)
+    };
+    if (status === 'present') {
+      updateFields.markedPresentAt = new Date();
+    }
+
+    const result = await ExaminationRegistration.updateMany(
+      {
+        examinationId,
+        slotId,
+        studentId: { $in: studentIds },
+        status: { $ne: 'cancelled' }
+      },
+      { $set: updateFields }
+    );
+
+    if (status === 'present') {
+      const notifications = studentIds.map((sId: string) => ({
+        userId: sId,
+        title: 'Attendance Verified - Ready for Exam',
+        message: 'Staff has verified your attendance. You can now start your examination.',
+        type: 'attendance_verified'
+      }));
+      await Notification.insertMany(notifications).catch(() => {});
+    }
+
+    await logAudit(
+      'EXAM_ATTENDANCE_BULK_MARKED',
+      { examinationId, slotId, studentCount: studentIds.length, status, markedBy: req.userId },
+      req
+    );
+
+    return res.json({
+      success: true,
+      message: `Successfully marked ${result.modifiedCount} students as ${status}.`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to bulk update attendance', error: error.message });
   }
 }
 

@@ -5,6 +5,7 @@ import {
   registerForExamSlot,
   cancelRegistration,
   startExaminationSession,
+  getExamAttendanceStatus,
   getSessionData,
   saveDraft,
   runPublicCode,
@@ -24,6 +25,7 @@ router.use(checkCollegeNetwork);
 // Examination schedules & registration
 router.get('/available', getAvailableExams);
 router.get('/:id', getExamById);
+router.get('/:id/attendance-status', getExamAttendanceStatus);
 router.post('/:id/register', registerForExamSlot);
 router.post('/:id/cancel-registration', cancelRegistration);
 

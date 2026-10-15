@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import {
   Calendar,
@@ -11,7 +12,8 @@ import {
   ShieldCheck,
   Globe,
   X,
-  FileCheck
+  FileCheck,
+  UserCheck
 } from 'lucide-react';
 
 export const ExamManagement: React.FC = () => {
@@ -199,9 +201,17 @@ export const ExamManagement: React.FC = () => {
               </div>
 
               <div className="flex items-center space-x-2">
+                <Link
+                  to={`/admin/attendance?examId=${exam._id}`}
+                  className="px-3 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 font-semibold text-xs border border-teal-500/30 transition flex items-center space-x-1"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Lab Attendance ({exam.registeredCount || 0})</span>
+                </Link>
+
                 <button
                   onClick={() => setShowAddSlotModal(exam._id)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold text-xs border border-slate-700 transition"
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 transition"
                 >
                   + Add Slot
                 </button>
@@ -222,8 +232,13 @@ export const ExamManagement: React.FC = () => {
             {/* Slots Matrix */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-3 border-t border-slate-800/80 text-xs">
               {exam.slots?.map((slot: any) => (
-                <div key={slot._id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between font-semibold text-white">
+                <Link
+                  key={slot._id}
+                  to={`/admin/attendance?examId=${exam._id}&slotId=${slot._id}`}
+                  className="p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-teal-500/60 space-y-1 block transition group"
+                  title="Click to view and mark attendance for this slot"
+                >
+                  <div className="flex items-center justify-between font-semibold text-white group-hover:text-teal-300 transition">
                     <span>{slot.slotName}</span>
                     <span className="text-teal-400 font-mono">
                       {slot.registeredCount}/{slot.capacity}
@@ -236,7 +251,7 @@ export const ExamManagement: React.FC = () => {
                       {new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

@@ -19,7 +19,8 @@ import {
   Layers,
   FileText,
   ShieldCheck,
-  Check
+  Check,
+  XCircle
 } from 'lucide-react';
 
 interface CourseVideo {
@@ -86,6 +87,8 @@ interface LevelDetailResponse {
   };
   registration: {
     registrationId: string;
+    attendanceStatus?: 'pending' | 'present' | 'absent';
+    markedPresentAt?: string;
     slot: {
       _id: string;
       slotNumber: number;
@@ -491,17 +494,44 @@ export const LevelDetailPage: React.FC = () => {
                         {registration.slot?.labName || 'Standard Lab'} (30 Capacity)
                       </strong>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between border-b border-teal-200/60 pb-1.5">
                       <span className="text-slate-500">Seat Allocation:</span>
                       <strong className="text-emerald-700 font-bold">Confirmed</strong>
+                    </div>
+                    <div className="flex justify-between items-center pt-0.5">
+                      <span className="text-slate-500">Attendance Gate:</span>
+                      {registration.attendanceStatus === 'present' ? (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Verified Present</span>
+                        </span>
+                      ) : registration.attendanceStatus === 'absent' ? (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          <XCircle className="w-3 h-3 text-rose-600" />
+                          <span>Marked Absent</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          <span>Pending (Report to {registration.slot?.labName || 'Lab'})</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <Link
                     to={`/exam/${examination?._id}`}
-                    className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition flex items-center justify-center space-x-2 shadow-sm"
+                    className={`w-full py-2.5 rounded-xl font-semibold text-xs transition flex items-center justify-center space-x-2 shadow-xs ${
+                      registration.attendanceStatus === 'present'
+                        ? 'bg-teal-600 hover:bg-teal-700 text-white'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    }`}
                   >
-                    <span>Enter Exam Arena</span>
+                    <span>
+                      {registration.attendanceStatus === 'present'
+                        ? 'Enter Exam Arena (Unlocked)'
+                        : 'Enter Exam Arena (Lab Gate)'}
+                    </span>
                     <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>

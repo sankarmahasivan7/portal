@@ -21,6 +21,7 @@ import { StudentManagement } from './pages/admin/StudentManagement';
 import { LanguageManagement } from './pages/admin/LanguageManagement';
 import { QuestionBank } from './pages/admin/QuestionBank';
 import { ExamManagement } from './pages/admin/ExamManagement';
+import { AttendanceManagement } from './pages/admin/AttendanceManagement';
 import { ResultsReporting } from './pages/admin/ResultsReporting';
 import { SecurityAudit } from './pages/admin/SecurityAudit';
 
@@ -163,6 +164,14 @@ export const App: React.FC = () => {
               element={
                 <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
                   <ExamManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/attendance"
+              element={
+                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
+                  <AttendanceManagement />
                 </ProtectedRoute>
               }
             />
