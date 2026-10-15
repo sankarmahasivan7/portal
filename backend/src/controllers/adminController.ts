@@ -1590,31 +1590,27 @@ export async function assignStudentToCourseExam(req: AuthRequest, res: Response)
 }
 
 /**
- * Generates a 6-digit Submission OTP for a student.
+ * Generates a 6-digit Submission OTP.
  * STRICT TIME LIMIT: Exactly 20 seconds validity.
+ * Can be used by all students without asking for student ID.
  */
 export async function generateSubmissionOtp(req: AuthRequest, res: Response) {
   try {
-    const { studentId, sessionId, examinationId } = req.body;
+    const { studentId, sessionId, examinationId } = req.body || {};
     const facultyId = req.userId!;
 
-    if (!studentId) {
-      return res.status(400).json({ success: false, message: 'Student ID is required to generate OTP.' });
-    }
-
-    // Lookup student by _id or studentId (roll number)
-    let student = await User.findById(studentId);
-    if (!student && typeof studentId === 'string') {
-      student = await User.findOne({
-        $or: [
-          { studentId: studentId.trim() },
-          { email: studentId.trim().toLowerCase() }
-        ]
-      });
-    }
-
-    if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found.' });
+    // Optional student lookup if studentId is provided
+    let student = null;
+    if (studentId) {
+      student = await User.findById(studentId);
+      if (!student && typeof studentId === 'string') {
+        student = await User.findOne({
+          $or: [
+            { studentId: studentId.trim() },
+            { email: studentId.trim().toLowerCase() }
+          ]
+        });
+      }
     }
 
     // Generate random 6-digit OTP (100000 - 999999)
@@ -1623,29 +1619,30 @@ export async function generateSubmissionOtp(req: AuthRequest, res: Response) {
     // Valid strictly for 20 SECONDS
     const expiresAt = new Date(now.getTime() + 20 * 1000);
 
-    // Invalidate previous unused OTPs for this student
+    // Invalidate previous expired OTPs
     await SubmissionOtp.updateMany(
-      { studentId: student._id, isUsed: false },
+      { expiresAt: { $lt: now } },
       { $set: { isUsed: true, usedAt: now } }
     );
 
     const otpDoc = await SubmissionOtp.create({
-      studentId: student._id,
+      studentId: student?._id,
       sessionId: sessionId || undefined,
       examinationId: examinationId || undefined,
       otp,
       generatedAt: now,
       expiresAt,
       generatedBy: facultyId,
-      isUsed: false
+      isUsed: false,
+      usedBySessions: []
     });
 
     await logAudit(
       'SUBMISSION_OTP_GENERATED',
       {
-        studentId: student._id,
-        studentName: `${student.firstName} ${student.lastName}`,
+        otp: otpDoc.otp,
         facultyId,
+        studentId: student?._id,
         validitySeconds: 20
       },
       req
@@ -1653,16 +1650,18 @@ export async function generateSubmissionOtp(req: AuthRequest, res: Response) {
 
     return res.json({
       success: true,
-      message: 'Submission OTP generated. Strictly valid for 20 seconds.',
+      message: 'Submission OTP generated. Strictly valid for 20 seconds for all students.',
       otp: otpDoc.otp,
       generatedAt: otpDoc.generatedAt,
       expiresAt: otpDoc.expiresAt,
       validitySeconds: 20,
-      student: {
-        id: student._id,
-        name: `${student.firstName} ${student.lastName}`,
-        studentId: student.studentId || student.email
-      }
+      student: student
+        ? {
+            id: student._id,
+            name: `${student.firstName} ${student.lastName}`,
+            studentId: student.studentId || student.email
+          }
+        : undefined
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Failed to generate submission OTP', error: error.message });

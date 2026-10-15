@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 import {
   Star,
   ShieldCheck,
@@ -9,15 +10,15 @@ import {
   CheckCircle2,
   Lock,
   ArrowRight,
-  BookOpen,
-  MessageSquare,
-  Sparkles,
-  HelpCircle
+  LogOut,
+  Award,
+  Users
 } from 'lucide-react';
 
 export const ExamFeedbackVerification: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const [sessionData, setSessionData] = useState<any>(null);
   const [examData, setExamData] = useState<any>(null);
@@ -34,6 +35,10 @@ export const ExamFeedbackVerification: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isExpiredError, setIsExpiredError] = useState(false);
+
+  // Success & Logout Gate state
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [logoutTimer, setLogoutTimer] = useState(6);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -55,6 +60,29 @@ export const ExamFeedbackVerification: React.FC = () => {
       fetchSession();
     }
   }, [sessionId]);
+
+  // Auto-logout countdown once OTP is verified
+  useEffect(() => {
+    if (!isSubmitted) return;
+
+    const interval = setInterval(() => {
+      setLogoutTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleLogoutNow();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isSubmitted]);
+
+  const handleLogoutNow = () => {
+    logout();
+    navigate('/login');
+  };
 
   const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only allow numbers and limit to 6 digits
@@ -87,7 +115,7 @@ export const ExamFeedbackVerification: React.FC = () => {
       });
 
       if (res.data.success) {
-        navigate(`/exam/result/${sessionId}`);
+        setIsSubmitted(true);
       }
     } catch (err: any) {
       const data = err.response?.data;
@@ -115,6 +143,52 @@ export const ExamFeedbackVerification: React.FC = () => {
     { value: 'very_hard', label: 'Very Tough', desc: 'Highly complex' }
   ];
 
+  // Success & Logout Modal / Screen
+  if (isSubmitted) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 sm:p-6 font-sans">
+        <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-emerald-500/30 p-8 text-center space-y-6 shadow-2xl relative overflow-hidden animate-fade-in">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-inner">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-extrabold text-white">Exam Finalized & Verified!</h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Your feedback and code solutions have been verified with the faculty OTP and officially submitted.
+            </p>
+          </div>
+
+          {/* Logout Notice & Auto-logout countdown */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+            <span className="text-slate-400 font-semibold block">Logging out from examination page in</span>
+            <span className="text-2xl font-mono font-black text-emerald-400 block">{logoutTimer} seconds</span>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={handleLogoutNow}
+              className="w-full sm:w-auto px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-rose-900/30"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Out Now</span>
+            </button>
+
+            <button
+              onClick={() => navigate(`/exam/result/${sessionId}`)}
+              className="w-full sm:w-auto px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition flex items-center justify-center space-x-1.5 border border-slate-700"
+            >
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>View Scorecard</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
       {/* Top Header Bar */}
@@ -139,7 +213,7 @@ export const ExamFeedbackVerification: React.FC = () => {
         <div className="flex items-center space-x-2">
           <span className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Questions Submitted</span>
+            <span>Questions Complete</span>
           </span>
         </div>
       </header>
@@ -166,7 +240,7 @@ export const ExamFeedbackVerification: React.FC = () => {
             <span className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs">
               3
             </span>
-            <span>Scorecard</span>
+            <span>Logout / Result</span>
           </div>
         </div>
 
@@ -187,7 +261,7 @@ export const ExamFeedbackVerification: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  Please call the lab faculty / invigilator to generate your verification One-Time Password on their attendance console.
+                  Faculty generates one OTP for all students in the lab. Enter the 6-digit OTP displayed by faculty to verify and log out from the exam.
                 </p>
               </div>
             </div>
@@ -196,10 +270,10 @@ export const ExamFeedbackVerification: React.FC = () => {
             <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs">
               <div className="font-semibold text-slate-300 flex items-center space-x-1.5">
                 <Clock className="w-4 h-4 text-amber-400" />
-                <span>Time-Sensitive Submission Rule:</span>
+                <span>20-Second Submission Rule:</span>
               </div>
               <p className="text-slate-400 leading-relaxed">
-                The OTP generated by your faculty is valid for <strong className="text-white">exactly 20 seconds</strong> from creation. Enter the 6-digit code below and click <strong className="text-teal-300">"Finalize & Submit Exam"</strong> before the 20 seconds expire.
+                The OTP generated by your faculty is valid for <strong className="text-white">exactly 20 seconds</strong> and can be used by all students. Enter the 6-digit code below and click <strong className="text-teal-300">"Verify OTP & Log Out"</strong> before the 20 seconds expire.
               </p>
             </div>
 
@@ -359,12 +433,12 @@ export const ExamFeedbackVerification: React.FC = () => {
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                  <span>Verifying OTP & Computing Score...</span>
+                  <span>Verifying OTP & Logging out...</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Finalize & Submit Exam</span>
+                  <LogOut className="w-4 h-4" />
+                  <span>Verify OTP & Logout from Exam</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

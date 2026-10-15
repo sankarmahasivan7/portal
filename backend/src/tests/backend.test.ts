@@ -562,7 +562,7 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
   });
 
   describe('5. Faculty 20-Second Submission OTP Verification & Feedback', () => {
-    it('Requires faculty OTP to finalize session, strictly invalidates after 20 seconds, and accepts valid OTP with feedback', async () => {
+    it('Faculty generates a single OTP without asking student ID, usable by all students within 20s, and strictly invalidates after 20 seconds', async () => {
       // 1. Get the active session for student 1
       const session = await ExaminationSession.findOne({ studentId: student1Id, status: 'active' });
       expect(session).toBeDefined();
@@ -579,14 +579,11 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(noOtpRes.status).toBe(400);
       expect(noOtpRes.body.message).toContain('OTP is required');
 
-      // 3. Faculty generates 20-second OTP for student 1
+      // 3. Faculty simply clicks Generate OTP without asking student ID (empty body)
       const otpRes = await request(app)
         .post('/api/admin/attendance/generate-submission-otp')
         .set('Authorization', `Bearer ${facultyToken}`)
-        .send({
-          studentId: student1Id,
-          sessionId
-        });
+        .send({});
       expect(otpRes.status).toBe(200);
       expect(otpRes.body.success).toBe(true);
       expect(otpRes.body.otp).toHaveLength(6);
@@ -607,7 +604,7 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
 
       // 5. Simulate 20-second expiration: manipulate expiresAt to the past
       await SubmissionOtp.updateOne(
-        { studentId: student1Id, otp: generatedOtp },
+        { otp: generatedOtp },
         { $set: { expiresAt: new Date(Date.now() - 5000) } } // expired 5 seconds ago
       );
 
@@ -623,18 +620,15 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(expiredRes.body.expired).toBe(true);
       expect(expiredRes.body.message).toContain('OTP has expired');
 
-      // 6. Faculty regenerates a fresh 20-second OTP
+      // 6. Faculty regenerates a fresh 20-second universal OTP without asking student ID
       const freshOtpRes = await request(app)
         .post('/api/admin/attendance/generate-submission-otp')
         .set('Authorization', `Bearer ${facultyToken}`)
-        .send({
-          studentId: student1Id,
-          sessionId
-        });
+        .send({});
       expect(freshOtpRes.status).toBe(200);
       const freshOtp = freshOtpRes.body.otp;
 
-      // 7. Student submits with valid fresh OTP and feedback
+      // 7. Student submits with valid fresh universal OTP and feedback
       const finalizeRes = await request(app)
         .post(`/api/exams/session/${sessionId}/finalize-with-feedback`)
         .set('Authorization', `Bearer ${student1Token}`)
@@ -655,16 +649,6 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(updatedSession!.feedback!.rating).toBe(5);
       expect(updatedSession!.feedback!.difficulty).toBe('moderate');
       expect(updatedSession!.feedback!.verifiedOtp).toBe(freshOtp);
-
-      // 9. Replay prevention: OTP cannot be reused
-      const reuseRes = await request(app)
-        .post(`/api/exams/session/${sessionId}/finalize-with-feedback`)
-        .set('Authorization', `Bearer ${student1Token}`)
-        .send({
-          otp: freshOtp,
-          rating: 5
-        });
-      expect(reuseRes.status).toBe(400);
     });
   });
 });

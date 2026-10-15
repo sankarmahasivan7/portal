@@ -821,11 +821,14 @@ export async function finalizeSessionWithFeedback(req: AuthRequest, res: Respons
 
     const cleanOtp = otp.trim();
 
-    // Verify OTP for this student: must match OTP and not already be used
+    // Verify OTP: can be used by all students or student-specific, matching the 6-digit code
     const otpRecord = await SubmissionOtp.findOne({
-      studentId: session.studentId,
       otp: cleanOtp,
-      isUsed: false
+      $or: [
+        { studentId: session.studentId },
+        { studentId: { $exists: false } },
+        { studentId: null }
+      ]
     }).sort({ createdAt: -1 });
 
     if (!otpRecord) {
@@ -846,10 +849,12 @@ export async function finalizeSessionWithFeedback(req: AuthRequest, res: Respons
       });
     }
 
-    // Mark OTP as used immediately to prevent reuse
-    otpRecord.isUsed = true;
-    otpRecord.usedAt = new Date();
-    await otpRecord.save();
+    // Record session into usedBySessions so multiple students can use the same OTP within 20s
+    if (!otpRecord.usedBySessions) otpRecord.usedBySessions = [];
+    if (!otpRecord.usedBySessions.some((id) => id.toString() === session._id.toString())) {
+      otpRecord.usedBySessions.push(session._id);
+      await otpRecord.save();
+    }
 
     // Save student feedback
     session.feedback = {

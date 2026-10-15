@@ -14,9 +14,11 @@ import {
   X,
   FileCheck,
   UserCheck,
-  Zap
+  Zap,
+  Key
 } from 'lucide-react';
 import { AssignCourseExamModal } from '../../components/admin/AssignCourseExamModal';
+import { FacultyOtpModal } from '../../components/admin/FacultyOtpModal';
 
 export const ExamManagement: React.FC = () => {
   const [exams, setExams] = useState<any[]>([]);
@@ -28,6 +30,7 @@ export const ExamManagement: React.FC = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignModalExamId, setAssignModalExamId] = useState<string | undefined>(undefined);
   const [assignToast, setAssignToast] = useState<string | null>(null);
+  const [showOtpModal, setShowOtpModal] = useState(false);
 
   // New Exam Form
   const [formData, setFormData] = useState({
@@ -160,6 +163,15 @@ export const ExamManagement: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowOtpModal(true)}
+            className="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center space-x-1.5 shadow-md transition"
+            title="Generate 20-second submission OTP for all students to log out"
+          >
+            <Key className="w-4 h-4 fill-slate-950" />
+            <span>Generate Lab OTP (20s)</span>
+          </button>
+
           <button
             onClick={() => {
               setAssignModalExamId(undefined);
@@ -545,6 +557,12 @@ export const ExamManagement: React.FC = () => {
           setTimeout(() => setAssignToast(null), 8000);
         }}
         preSelectedExamId={assignModalExamId}
+      />
+
+      {/* Universal Faculty Submission OTP Modal (20s validity) */}
+      <FacultyOtpModal
+        isOpen={showOtpModal}
+        onClose={() => setShowOtpModal(false)}
       />
     </div>
   );

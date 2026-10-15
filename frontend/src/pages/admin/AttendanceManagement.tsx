@@ -102,17 +102,15 @@ export const AttendanceManagement: React.FC = () => {
   const [studentToAssign, setStudentToAssign] = useState<any>(null);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
 
-  // Faculty Submission OTP Modal state (20-second validity)
+  // Faculty Submission OTP Modal state (20-second validity, universal for all students)
   const [showOtpModal, setShowOtpModal] = useState(false);
-  const [studentForOtp, setStudentForOtp] = useState<any>(null);
 
   const handleOpenAssignModal = (student?: any) => {
     setStudentToAssign(student || null);
     setShowAssignModal(true);
   };
 
-  const handleOpenOtpModal = (student?: any) => {
-    setStudentForOtp(student || null);
+  const handleOpenOtpModal = () => {
     setShowOtpModal(true);
   };
 
@@ -618,9 +616,9 @@ export const AttendanceManagement: React.FC = () => {
                           <div className="flex items-center justify-end space-x-1.5">
                             {/* Faculty Generate OTP (20s) */}
                             <button
-                              onClick={() => handleOpenOtpModal(item.student)}
+                              onClick={() => handleOpenOtpModal()}
                               className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 shadow-2xs"
-                              title="Generate 20-second submission verification OTP for this student"
+                              title="Generate 20-second submission verification OTP for students to log out"
                             >
                               <Key className="w-3.5 h-3.5 text-teal-600" />
                               <span>OTP</span>
@@ -736,11 +734,10 @@ export const AttendanceManagement: React.FC = () => {
         currentTiming={selectedTiming}
       />
 
-      {/* Faculty Submission OTP Modal (20-Second Validity) */}
+      {/* Faculty Submission OTP Modal (20-Second Validity, universal for all students) */}
       <FacultyOtpModal
         isOpen={showOtpModal}
         onClose={() => setShowOtpModal(false)}
-        initialStudent={studentForOtp}
       />
     </div>
   );
