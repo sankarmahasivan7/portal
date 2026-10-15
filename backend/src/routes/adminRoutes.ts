@@ -42,7 +42,7 @@ router.get('/seb/download-config', downloadSebConfig);
 router.use(authenticate);
 
 // Overview
-router.get('/overview', requireRole(['admin', 'faculty', 'controller']), getOverviewStats);
+router.get('/overview', requireRole(['admin', 'controller']), getOverviewStats);
 
 // Student Management (Admin & Controller)
 router.get('/students', requireRole(['admin', 'controller']), getStudents);
@@ -57,17 +57,17 @@ router.get('/languages', requireRole(['admin', 'faculty']), getLanguages);
 router.post('/languages', requireRole(['admin']), createLanguage);
 router.patch('/languages/:id', requireRole(['admin']), updateLanguage);
 
-// Question Bank Management (Admin & Faculty)
+// Question Bank Management (Admin)
 router.get('/questions', requireRole(['admin', 'faculty']), getQuestions);
-router.post('/questions', requireRole(['admin', 'faculty']), createQuestion);
-router.put('/questions/:id', requireRole(['admin', 'faculty']), updateQuestion);
-router.delete('/questions/:id', requireRole(['admin', 'faculty']), deleteQuestion);
+router.post('/questions', requireRole(['admin']), createQuestion);
+router.put('/questions/:id', requireRole(['admin']), updateQuestion);
+router.delete('/questions/:id', requireRole(['admin']), deleteQuestion);
 
 // Examination Management (Admin & Faculty & Controller)
 router.get('/exams', requireRole(['admin', 'faculty', 'controller']), getAdminExams);
 router.post('/exams', requireRole(['admin', 'faculty']), createExam);
 router.patch('/exams/:id/publish', requireRole(['admin', 'faculty']), togglePublishExam);
-router.post('/exams/:id/slots', requireRole(['admin', 'controller']), addExamSlot);
+router.post('/exams/:id/slots', requireRole(['admin', 'faculty', 'controller']), addExamSlot);
 
 // Attendance & Hall Invigilation (Admin, Faculty, Controller)
 router.get('/attendance', requireRole(['admin', 'faculty', 'controller']), getAttendanceByTiming);
@@ -78,9 +78,9 @@ router.get('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty
 router.post('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty', 'controller']), markStudentAttendance);
 router.post('/exams/:id/slots/:slotId/attendance/bulk', requireRole(['admin', 'faculty', 'controller']), markBulkAttendance);
 
-// Results & Reporting (Admin, Faculty, Controller)
-router.get('/results', requireRole(['admin', 'faculty', 'controller']), getAdminResults);
-router.get('/results/export-csv', requireRole(['admin', 'faculty', 'controller']), exportResultsCsv);
+// Results & Reporting (Admin, Controller)
+router.get('/results', requireRole(['admin', 'controller']), getAdminResults);
+router.get('/results/export-csv', requireRole(['admin', 'controller']), exportResultsCsv);
 
 // Security & Audit (Admin only)
 router.get('/audit-logs', requireRole(['admin']), getAuditLogs);

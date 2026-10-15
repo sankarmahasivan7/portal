@@ -28,7 +28,6 @@ export const Navbar: React.FC = () => {
   if (!user) return null;
 
   const isStudent = user.role === 'student';
-  const isAdminOrFaculty = ['admin', 'faculty', 'controller'].includes(user.role);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -38,7 +37,10 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo & Portal Name */}
           <div className="flex items-center space-x-3">
-            <Link to={isStudent ? '/student/total-courses' : '/admin/overview'} className="flex items-center space-x-2.5">
+            <Link
+              to={isStudent ? '/student/total-courses' : user.role === 'faculty' ? '/admin/exams' : '/admin/overview'}
+              className="flex items-center space-x-2.5"
+            >
               <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600 shadow-xs">
                 <Code2 className="w-6 h-6" />
               </div>
@@ -81,7 +83,34 @@ export const Navbar: React.FC = () => {
                 </>
               )}
 
-              {isAdminOrFaculty && (
+              {user.role === 'faculty' && (
+                <>
+                  <Link
+                    to="/admin/exams"
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
+                      isActive('/admin/exams')
+                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4" />
+                    <span>Exams</span>
+                  </Link>
+                  <Link
+                    to="/admin/attendance"
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
+                      isActive('/admin/attendance')
+                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>Attendance</span>
+                  </Link>
+                </>
+              )}
+
+              {user.role !== 'student' && user.role !== 'faculty' && (
                 <>
                   <Link
                     to="/admin/overview"
@@ -240,6 +269,23 @@ export const Navbar: React.FC = () => {
                 My Courses
               </Link>
             </>
+          ) : user.role === 'faculty' ? (
+            <>
+              <Link
+                to="/admin/exams"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              >
+                Exams
+              </Link>
+              <Link
+                to="/admin/attendance"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              >
+                Attendance Gate
+              </Link>
+            </>
           ) : (
             <>
               <Link
@@ -291,6 +337,15 @@ export const Navbar: React.FC = () => {
               >
                 Results
               </Link>
+              {user.role === 'admin' && (
+                <Link
+                  to="/admin/security"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                >
+                  Security & Audit
+                </Link>
+              )}
             </>
           )}
 

@@ -11,6 +11,7 @@ import { runSeed } from '../scripts/seed';
 
 describe('College Programming Assessment Portal - Backend Test Suite', () => {
   let adminToken: string;
+  let facultyToken: string;
   let student1Token: string;
   let student1Id: string;
   let cLanguageId: string;
@@ -31,6 +32,13 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       .send({ email: 'admin@college.edu', password: 'Admin@123' });
     expect(adminRes.status).toBe(200);
     adminToken = adminRes.body.token;
+
+    // Login as Faculty
+    const facultyRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'faculty@college.edu', password: 'Faculty@123' });
+    expect(facultyRes.status).toBe(200);
+    facultyToken = facultyRes.body.token;
 
     // Login as Student 1
     const studentRes = await request(app)
@@ -112,6 +120,35 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.stats.totalStudents).toBeGreaterThan(0);
+    });
+
+    test('Faculty can only access exams and attendance, not overview, students, or results', async () => {
+      // Forbidden pages for faculty
+      const overviewRes = await request(app)
+        .get('/api/admin/overview')
+        .set('Authorization', `Bearer ${facultyToken}`);
+      expect(overviewRes.status).toBe(403);
+
+      const studentsRes = await request(app)
+        .get('/api/admin/students')
+        .set('Authorization', `Bearer ${facultyToken}`);
+      expect(studentsRes.status).toBe(403);
+
+      const resultsRes = await request(app)
+        .get('/api/admin/results')
+        .set('Authorization', `Bearer ${facultyToken}`);
+      expect(resultsRes.status).toBe(403);
+
+      // Allowed pages for faculty
+      const examsRes = await request(app)
+        .get('/api/admin/exams')
+        .set('Authorization', `Bearer ${facultyToken}`);
+      expect(examsRes.status).toBe(200);
+
+      const attendanceRes = await request(app)
+        .get('/api/admin/attendance')
+        .set('Authorization', `Bearer ${facultyToken}`);
+      expect(attendanceRes.status).toBe(200);
     });
   });
 

@@ -44,7 +44,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> 
   }
 
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'student' ? '/student/total-courses' : '/admin/overview'} replace />;
+    return (
+      <Navigate
+        to={
+          user.role === 'student'
+            ? '/student/total-courses'
+            : user.role === 'faculty'
+            ? '/admin/exams'
+            : '/admin/overview'
+        }
+        replace
+      />
+    );
   }
 
   return <>{children}</>;
@@ -130,7 +141,7 @@ export const App: React.FC = () => {
             <Route
               path="/admin/overview"
               element={
-                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
+                <ProtectedRoute roles={['admin', 'controller']}>
                   <AdminDashboard />
                 </ProtectedRoute>
               }
@@ -146,7 +157,7 @@ export const App: React.FC = () => {
             <Route
               path="/admin/languages"
               element={
-                <ProtectedRoute roles={['admin', 'faculty']}>
+                <ProtectedRoute roles={['admin']}>
                   <LanguageManagement />
                 </ProtectedRoute>
               }
@@ -154,7 +165,7 @@ export const App: React.FC = () => {
             <Route
               path="/admin/questions"
               element={
-                <ProtectedRoute roles={['admin', 'faculty']}>
+                <ProtectedRoute roles={['admin']}>
                   <QuestionBank />
                 </ProtectedRoute>
               }
@@ -178,7 +189,7 @@ export const App: React.FC = () => {
             <Route
               path="/admin/results"
               element={
-                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
+                <ProtectedRoute roles={['admin', 'controller']}>
                   <ResultsReporting />
                 </ProtectedRoute>
               }

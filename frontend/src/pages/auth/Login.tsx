@@ -21,7 +21,9 @@ export const Login: React.FC = () => {
       const res = await api.post('/auth/login', { email, password });
       if (res.data.success) {
         login(res.data.token, res.data.user);
-        if (['admin', 'faculty', 'controller'].includes(res.data.user.role)) {
+        if (res.data.user.role === 'faculty') {
+          navigate('/admin/exams');
+        } else if (['admin', 'controller'].includes(res.data.user.role)) {
           navigate('/admin/overview');
         } else {
           navigate('/student/total-courses');
