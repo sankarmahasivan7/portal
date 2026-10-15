@@ -182,7 +182,7 @@ export async function runSeed() {
         levelNumber: lvl,
         title: `${cfg.name} Level ${lvl}`,
         description: `Assessment curriculum and milestones for Level ${lvl}`,
-        defaultPassingPercentage: 60,
+        defaultPassingPercentage: 100,
         prerequisiteLevel: lvl === 1 ? null : lvl - 1
       });
     }
@@ -416,7 +416,7 @@ export async function runSeed() {
     examDate: today,
     durationMinutes: 60,
     maxStudents: 450, // 5 slots * 3 labs * 30 seats
-    passingPercentage: 60,
+    passingPercentage: 100,
     questions: [q1._id, q2._id],
     allowedLanguages: ['c'],
     instructions: 'Write standard ISO C code. Ensure you handle input from stdin and write to stdout.',
@@ -437,7 +437,7 @@ export async function runSeed() {
     examDate: today,
     durationMinutes: 60,
     maxStudents: 450,
-    passingPercentage: 60,
+    passingPercentage: 100,
     questions: [q3._id],
     allowedLanguages: ['c'],
     instructions: 'Arrays and loop constructs.',
@@ -458,7 +458,7 @@ export async function runSeed() {
     examDate: today,
     durationMinutes: 60,
     maxStudents: 450,
-    passingPercentage: 60,
+    passingPercentage: 100,
     questions: [q1._id, q2._id],
     allowedLanguages: ['python'],
     instructions: 'Write Python 3 code. Read from sys.stdin or input().',
@@ -479,7 +479,7 @@ export async function runSeed() {
     examDate: today,
     durationMinutes: 60,
     maxStudents: 450,
-    passingPercentage: 60,
+    passingPercentage: 100,
     questions: [q1._id, q2._id],
     allowedLanguages: ['java'],
     instructions: 'Ensure class name is Main.',
@@ -508,7 +508,7 @@ export async function runSeed() {
     examDate: futureExamDate,
     durationMinutes: 60,
     maxStudents: 450,
-    passingPercentage: 60,
+    passingPercentage: 100,
     questions: [q1._id, q2._id],
     allowedLanguages: ['cpp'],
     instructions: 'Registration unlocks strictly on the previous day at 9:00 PM.',

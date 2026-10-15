@@ -424,7 +424,7 @@ export const LevelDetailPage: React.FC = () => {
                     • Assessment duration is strictly <strong>60 minutes</strong>. An authoritative server timer enforces auto-submission upon timeout.
                   </p>
                   <p>
-                    • Submissions are evaluated against multiple hidden test cases in an isolated container sandbox. Passing percentage required is <strong>{examination?.passingPercentage || 60}%</strong>.
+                    • Submissions are evaluated against multiple hidden test cases in an isolated container sandbox. Passing percentage required is <strong>{examination?.passingPercentage || 100}%</strong>.
                   </p>
                   <p>
                     • Fullscreen anti-cheat monitoring and tab-switch detection are active throughout the examination session.
@@ -491,7 +491,7 @@ export const LevelDetailPage: React.FC = () => {
                     <div className="flex justify-between border-b border-teal-200/60 pb-1.5">
                       <span className="text-slate-500">Assigned Lab:</span>
                       <strong className="text-slate-900">
-                        {registration.slot?.labName || 'Standard Lab'} (30 Capacity)
+                        {registration.slot?.labName || 'Standard Lab'}
                       </strong>
                     </div>
                     <div className="flex justify-between border-b border-teal-200/60 pb-1.5">
@@ -676,16 +676,8 @@ export const LevelDetailPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-slate-400">Passing Threshold:</span>
                   <span className="font-semibold text-slate-800">
-                    {examination?.passingPercentage || 60}% Passing Score
+                    {examination?.passingPercentage || 100}% Passing Score
                   </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Capacity per Lab:</span>
-                  <span className="font-semibold text-slate-800">30 Students</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Environment:</span>
-                  <span className="font-semibold text-slate-800">Isolated Sandbox</span>
                 </div>
               </div>
             </div>

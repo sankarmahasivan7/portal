@@ -335,7 +335,7 @@ export async function createLanguage(req: AuthRequest, res: Response) {
         levelNumber: i,
         title: `${name} Level ${i}`,
         description: `Curriculum and assessments for Level ${i}`,
-        defaultPassingPercentage: 60,
+        defaultPassingPercentage: 100,
         prerequisiteLevel: i === 1 ? null : i - 1
       });
     }
@@ -590,7 +590,7 @@ export async function createExam(req: AuthRequest, res: Response) {
       examDate: parsedExamDate,
       durationMinutes: durationMinutes || 60,
       maxStudents: maxStudents || 450, // 5 slots * 3 labs * 30 seats = 450 max
-      passingPercentage: passingPercentage || 60,
+      passingPercentage: passingPercentage || 100,
       questions: questions || [],
       allowedLanguages: allowedLanguages || ['c', 'cpp', 'java', 'python'],
       instructions: instructions || 'Follow exam guidelines.',

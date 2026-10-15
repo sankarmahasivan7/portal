@@ -44,7 +44,7 @@ const ExaminationSchema = new Schema<IExamination>(
     examDate: { type: Date, required: true },
     durationMinutes: { type: Number, required: true, default: 60 },
     maxStudents: { type: Number, default: 100 },
-    passingPercentage: { type: Number, required: true, default: 60, min: 1, max: 100 },
+    passingPercentage: { type: Number, required: true, default: 100, min: 1, max: 100 },
     questions: [{ type: Schema.Types.ObjectId, ref: 'Question' }],
     allowedLanguages: [{ type: String }],
     executionLimits: {

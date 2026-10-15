@@ -34,7 +34,7 @@ export const ExamManagement: React.FC = () => {
     registrationEndDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16),
     examDate: new Date().toISOString().slice(0, 16),
     durationMinutes: 60,
-    passingPercentage: 60,
+    passingPercentage: 100,
     maxStudents: 50,
     selectedQuestions: [] as string[],
     sebRequired: false,

@@ -17,7 +17,7 @@ const ProgrammingLevelSchema = new Schema<IProgrammingLevel>(
     levelNumber: { type: Number, required: true },
     title: { type: String, required: true },
     description: { type: String, default: '' },
-    defaultPassingPercentage: { type: Number, default: 60, min: 1, max: 100 },
+    defaultPassingPercentage: { type: Number, default: 100, min: 1, max: 100 },
     prerequisiteLevel: { type: Number, default: null }
   },
   { timestamps: true }
