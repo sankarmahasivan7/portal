@@ -59,7 +59,7 @@ export async function checkCollegeNetwork(
     if (!isAllowed) {
       return res.status(403).json({
         success: false,
-        message: `Access denied. Examinations and student services are restricted to college campus networks. Your IP (${clientIp}) is not within the authorized campus IP ranges.`
+        message: `Access denied. Taking this examination is strictly restricted to the college campus lab network. Your IP (${clientIp}) is not within the authorized campus IP ranges. Please report to your assigned computer lab to take the test.`
       });
     }
 
