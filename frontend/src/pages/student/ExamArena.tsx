@@ -323,12 +323,10 @@ export const ExamArena: React.FC = () => {
         }).catch(() => {});
       }
 
-      const res = await api.post(`/exams/session/${session.id}/finalize`);
-      if (res.data.success) {
-        navigate(`/exam/result/${session.id}`);
-      }
+      // Open feedback and faculty OTP verification gate
+      navigate(`/exam/feedback/${session.id}`);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error finalizing examination.');
+      alert(err.response?.data?.message || 'Error proceeding to verification.');
     } finally {
       setIsFinalizing(false);
     }

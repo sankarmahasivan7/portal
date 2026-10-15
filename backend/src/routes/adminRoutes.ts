@@ -27,6 +27,7 @@ import {
   removeAbsentCourseFromStudent,
   searchStudentsForAssignment,
   assignStudentToCourseExam,
+  generateSubmissionOtp,
   getAdminResults,
   exportResultsCsv,
   getAuditLogs,
@@ -78,6 +79,7 @@ router.post('/attendance/bulk-mark', requireRole(['admin', 'faculty', 'controlle
 router.post('/attendance/remove-absent-course', requireRole(['admin', 'faculty', 'controller']), removeAbsentCourseFromStudent);
 router.get('/attendance/search-students', requireRole(['admin', 'faculty', 'controller']), searchStudentsForAssignment);
 router.post('/attendance/assign-course-exam', requireRole(['admin', 'faculty', 'controller']), assignStudentToCourseExam);
+router.post('/attendance/generate-submission-otp', requireRole(['admin', 'faculty', 'controller']), generateSubmissionOtp);
 router.get('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty', 'controller']), getSlotAttendance);
 router.post('/exams/:id/slots/:slotId/attendance', requireRole(['admin', 'faculty', 'controller']), markStudentAttendance);
 router.post('/exams/:id/slots/:slotId/attendance/bulk', requireRole(['admin', 'faculty', 'controller']), markBulkAttendance);

@@ -11,6 +11,7 @@ import {
   runPublicCode,
   submitQuestionAnswer,
   finalizeSession,
+  finalizeSessionWithFeedback,
   getSessionResult
 } from '../controllers/examController';
 import { authenticate } from '../middleware/auth';
@@ -35,6 +36,7 @@ router.post('/session/:sessionId/draft', checkCollegeNetwork, verifySafeExamBrow
 router.post('/session/:sessionId/run', checkCollegeNetwork, verifySafeExamBrowser, runPublicCode);
 router.post('/session/:sessionId/submit', checkCollegeNetwork, verifySafeExamBrowser, submitQuestionAnswer);
 router.post('/session/:sessionId/finalize', checkCollegeNetwork, finalizeSession);
+router.post('/session/:sessionId/finalize-with-feedback', checkCollegeNetwork, finalizeSessionWithFeedback);
 router.get('/session/:sessionId/result', getSessionResult);
 
 export default router;

@@ -9,6 +9,15 @@ export interface IDraftCode {
   updatedAt: Date;
 }
 
+export interface IExaminationFeedback {
+  rating: number;
+  difficulty?: 'easy' | 'moderate' | 'hard' | 'very_hard';
+  comments?: string;
+  submittedAt: Date;
+  verifiedOtp?: string;
+  verifiedByFaculty?: mongoose.Types.ObjectId;
+}
+
 export interface IExaminationSession extends Document {
   examinationId: mongoose.Types.ObjectId;
   slotId: mongoose.Types.ObjectId;
@@ -22,6 +31,7 @@ export interface IExaminationSession extends Document {
   userAgent?: string;
   sebVerified: boolean;
   attemptNumber: number;
+  feedback?: IExaminationFeedback;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -52,7 +62,15 @@ const ExaminationSessionSchema = new Schema<IExaminationSession>(
     ipAddress: { type: String },
     userAgent: { type: String },
     sebVerified: { type: Boolean, default: false },
-    attemptNumber: { type: Number, default: 1 }
+    attemptNumber: { type: Number, default: 1 },
+    feedback: {
+      rating: { type: Number, min: 1, max: 5 },
+      difficulty: { type: String, enum: ['easy', 'moderate', 'hard', 'very_hard'] },
+      comments: { type: String, default: '' },
+      submittedAt: { type: Date },
+      verifiedOtp: { type: String },
+      verifiedByFaculty: { type: Schema.Types.ObjectId, ref: 'User' }
+    }
   },
   { timestamps: true }
 );

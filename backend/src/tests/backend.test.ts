@@ -6,6 +6,8 @@ import { ProgrammingLanguage } from '../models/ProgrammingLanguage';
 import { Examination } from '../models/Examination';
 import { ExaminationSlot } from '../models/ExaminationSlot';
 import { ExaminationRegistration } from '../models/ExaminationRegistration';
+import { ExaminationSession } from '../models/ExaminationSession';
+import { SubmissionOtp } from '../models/SubmissionOtp';
 import { StudentProgress } from '../models/StudentProgress';
 import { ProgressionService } from '../services/ProgressionService';
 import { runSeed } from '../scripts/seed';
@@ -556,6 +558,113 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(startRes.status).toBe(201);
       expect(startRes.body.success).toBe(true);
       expect(startRes.body.sessionId).toBeDefined();
+    });
+  });
+
+  describe('5. Faculty 20-Second Submission OTP Verification & Feedback', () => {
+    it('Requires faculty OTP to finalize session, strictly invalidates after 20 seconds, and accepts valid OTP with feedback', async () => {
+      // 1. Get the active session for student 1
+      const session = await ExaminationSession.findOne({ studentId: student1Id, status: 'active' });
+      expect(session).toBeDefined();
+      const sessionId = session!._id.toString();
+
+      // 2. Student attempts to finalize without OTP
+      const noOtpRes = await request(app)
+        .post(`/api/exams/session/${sessionId}/finalize-with-feedback`)
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({
+          rating: 5,
+          comments: 'Great exam'
+        });
+      expect(noOtpRes.status).toBe(400);
+      expect(noOtpRes.body.message).toContain('OTP is required');
+
+      // 3. Faculty generates 20-second OTP for student 1
+      const otpRes = await request(app)
+        .post('/api/admin/attendance/generate-submission-otp')
+        .set('Authorization', `Bearer ${facultyToken}`)
+        .send({
+          studentId: student1Id,
+          sessionId
+        });
+      expect(otpRes.status).toBe(200);
+      expect(otpRes.body.success).toBe(true);
+      expect(otpRes.body.otp).toHaveLength(6);
+      expect(otpRes.body.validitySeconds).toBe(20);
+      const generatedOtp = otpRes.body.otp;
+
+      // 4. Test wrong OTP rejection
+      const wrongOtpRes = await request(app)
+        .post(`/api/exams/session/${sessionId}/finalize-with-feedback`)
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({
+          otp: '000000',
+          rating: 4,
+          comments: 'Testing wrong OTP'
+        });
+      expect(wrongOtpRes.status).toBe(400);
+      expect(wrongOtpRes.body.invalid).toBe(true);
+
+      // 5. Simulate 20-second expiration: manipulate expiresAt to the past
+      await SubmissionOtp.updateOne(
+        { studentId: student1Id, otp: generatedOtp },
+        { $set: { expiresAt: new Date(Date.now() - 5000) } } // expired 5 seconds ago
+      );
+
+      const expiredRes = await request(app)
+        .post(`/api/exams/session/${sessionId}/finalize-with-feedback`)
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({
+          otp: generatedOtp,
+          rating: 5,
+          comments: 'Trying after 20s'
+        });
+      expect(expiredRes.status).toBe(400);
+      expect(expiredRes.body.expired).toBe(true);
+      expect(expiredRes.body.message).toContain('OTP has expired');
+
+      // 6. Faculty regenerates a fresh 20-second OTP
+      const freshOtpRes = await request(app)
+        .post('/api/admin/attendance/generate-submission-otp')
+        .set('Authorization', `Bearer ${facultyToken}`)
+        .send({
+          studentId: student1Id,
+          sessionId
+        });
+      expect(freshOtpRes.status).toBe(200);
+      const freshOtp = freshOtpRes.body.otp;
+
+      // 7. Student submits with valid fresh OTP and feedback
+      const finalizeRes = await request(app)
+        .post(`/api/exams/session/${sessionId}/finalize-with-feedback`)
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({
+          otp: freshOtp,
+          rating: 5,
+          difficulty: 'moderate',
+          comments: 'Questions were clear and environment was smooth.'
+        });
+      expect(finalizeRes.status).toBe(200);
+      expect(finalizeRes.body.success).toBe(true);
+
+      // 8. Verify session recorded feedback and faculty verification
+      const updatedSession = await ExaminationSession.findById(sessionId);
+      expect(updatedSession).toBeDefined();
+      expect(updatedSession!.status).toBe('submitted');
+      expect(updatedSession!.feedback).toBeDefined();
+      expect(updatedSession!.feedback!.rating).toBe(5);
+      expect(updatedSession!.feedback!.difficulty).toBe('moderate');
+      expect(updatedSession!.feedback!.verifiedOtp).toBe(freshOtp);
+
+      // 9. Replay prevention: OTP cannot be reused
+      const reuseRes = await request(app)
+        .post(`/api/exams/session/${sessionId}/finalize-with-feedback`)
+        .set('Authorization', `Bearer ${student1Token}`)
+        .send({
+          otp: freshOtp,
+          rating: 5
+        });
+      expect(reuseRes.status).toBe(400);
     });
   });
 });

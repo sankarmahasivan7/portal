@@ -13,6 +13,7 @@ import { CourseOverview } from './pages/student/CourseOverview';
 import { MyCourses } from './pages/student/MyCourses';
 import { LevelDetailPage } from './pages/student/LevelDetailPage';
 import { ExamArena } from './pages/student/ExamArena';
+import { ExamFeedbackVerification } from './pages/student/ExamFeedbackVerification';
 import { ExamResultView } from './pages/student/ExamResultView';
 
 // Admin Pages
@@ -125,6 +126,14 @@ export const App: React.FC = () => {
               element={
                 <ProtectedRoute roles={['student', 'admin', 'faculty']}>
                   <ExamArena />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/exam/feedback/:sessionId"
+              element={
+                <ProtectedRoute roles={['student', 'admin', 'faculty']}>
+                  <ExamFeedbackVerification />
                 </ProtectedRoute>
               }
             />

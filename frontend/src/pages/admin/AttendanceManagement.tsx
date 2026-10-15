@@ -16,9 +16,11 @@ import {
   Filter,
   Trash2,
   Zap,
-  AlertCircle
+  AlertCircle,
+  Key
 } from 'lucide-react';
 import { AssignCourseExamModal } from '../../components/admin/AssignCourseExamModal';
+import { FacultyOtpModal } from '../../components/admin/FacultyOtpModal';
 
 interface StudentItem {
   registrationId: string;
@@ -100,9 +102,18 @@ export const AttendanceManagement: React.FC = () => {
   const [studentToAssign, setStudentToAssign] = useState<any>(null);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
 
+  // Faculty Submission OTP Modal state (20-second validity)
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [studentForOtp, setStudentForOtp] = useState<any>(null);
+
   const handleOpenAssignModal = (student?: any) => {
     setStudentToAssign(student || null);
     setShowAssignModal(true);
+  };
+
+  const handleOpenOtpModal = (student?: any) => {
+    setStudentForOtp(student || null);
+    setShowOtpModal(true);
   };
 
   const handleAssignSuccess = (message: string) => {
@@ -481,6 +492,15 @@ export const AttendanceManagement: React.FC = () => {
 
             <div className="flex items-center space-x-2">
               <button
+                onClick={() => handleOpenOtpModal()}
+                className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-xs"
+                title="Generate 20-second submission verification OTP for student"
+              >
+                <Key className="w-4 h-4" />
+                <span>Generate OTP (20s)</span>
+              </button>
+
+              <button
                 onClick={() => handleOpenAssignModal()}
                 className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-xs"
                 title="Student finished early in 20 mins? Assign another course test immediately"
@@ -596,6 +616,16 @@ export const AttendanceManagement: React.FC = () => {
 
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end space-x-1.5">
+                            {/* Faculty Generate OTP (20s) */}
+                            <button
+                              onClick={() => handleOpenOtpModal(item.student)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 shadow-2xs"
+                              title="Generate 20-second submission verification OTP for this student"
+                            >
+                              <Key className="w-3.5 h-3.5 text-teal-600" />
+                              <span>OTP</span>
+                            </button>
+
                             {/* Fast-Track Assign Another Course Button */}
                             <button
                               onClick={() => handleOpenAssignModal(item.student)}
@@ -704,6 +734,13 @@ export const AttendanceManagement: React.FC = () => {
         preSelectedStudent={studentToAssign}
         currentLab={selectedLab}
         currentTiming={selectedTiming}
+      />
+
+      {/* Faculty Submission OTP Modal (20-Second Validity) */}
+      <FacultyOtpModal
+        isOpen={showOtpModal}
+        onClose={() => setShowOtpModal(false)}
+        initialStudent={studentForOtp}
       />
     </div>
   );
