@@ -10,12 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY package*.json ./
-COPY execution-worker/package*.json ./execution-worker/
+
+# Install worker dependencies
+COPY execution-worker/package*.json ./
 RUN npm install
 
-COPY execution-worker ./execution-worker
-RUN npm --prefix execution-worker run build
+# Build TypeScript source
+COPY execution-worker ./
+RUN npm run build
 
 ENV NODE_ENV=production
 ENV GCC_PATH=gcc
@@ -26,5 +28,4 @@ ENV JAVA_PATH=java
 ENV PORT=5050
 
 EXPOSE 5050
-CMD ["node", "execution-worker/dist/index.js"]
-
+CMD ["node", "dist/index.js"]
