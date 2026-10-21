@@ -46,5 +46,6 @@ export interface ExecutionJobResponse {
   totalExecutionTimeMs: number;
   peakMemoryKb: number;
   error?: string;
+  errorLog?: string;
 }
 

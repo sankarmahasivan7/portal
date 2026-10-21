@@ -6,6 +6,7 @@ import {
   getLevelDetail,
   getCourseOverview,
   registerCourseLevel,
+  getSlotHistory,
   getNotifications,
   markNotificationRead
 } from '../controllers/studentController';
@@ -19,6 +20,7 @@ router.use(authenticate);
 router.get('/dashboard', requireRole(['student']), getStudentDashboard);
 router.get('/total-courses', requireRole(['student']), getTotalCourses);
 router.get('/my-courses', requireRole(['student']), getMyCourses);
+router.get('/slot-history', requireRole(['student']), getSlotHistory);
 router.get('/course-overview/:languageSlug', requireRole(['student']), getCourseOverview);
 router.post('/course/:languageSlug/register', requireRole(['student']), registerCourseLevel);
 router.get('/course/:languageId/level/:levelNumber', requireRole(['student']), getLevelDetail);

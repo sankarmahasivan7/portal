@@ -15,13 +15,25 @@ import {
   FileCheck,
   UserCheck,
   Zap,
-  Key
+  Key,
+  Building,
+  Sparkles
 } from 'lucide-react';
+import { formatSlotDate } from '../../utils/dateUtils';
 import { AssignCourseExamModal } from '../../components/admin/AssignCourseExamModal';
 import { FacultyOtpModal } from '../../components/admin/FacultyOtpModal';
 
+const STANDARD_TIME_WINDOWS = [
+  '09:15 to 10:15',
+  '10:25 to 11:25',
+  '11:35 to 12:35',
+  '1:30 to 2:30 (13:30 - 14:30)',
+  '2:45 to 3:45 (14:45 - 15:45)'
+];
+
 export const ExamManagement: React.FC = () => {
   const [exams, setExams] = useState<any[]>([]);
+  const [collegiateSlots, setCollegiateSlots] = useState<any[]>([]);
   const [languages, setLanguages] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +80,12 @@ export const ExamManagement: React.FC = () => {
         api.get('/admin/questions')
       ]);
 
-      if (examsRes.data.success) setExams(examsRes.data.exams);
+      if (examsRes.data.success) {
+        setExams(examsRes.data.exams);
+        if (examsRes.data.collegiateSlots) {
+          setCollegiateSlots(examsRes.data.collegiateSlots);
+        }
+      }
       if (langsRes.data.success) {
         setLanguages(langsRes.data.languages);
         if (langsRes.data.languages.length > 0 && !formData.languageId) {
@@ -194,6 +211,107 @@ export const ExamManagement: React.FC = () => {
         </div>
       </div>
 
+      {/* Campus Physical Labs & Unified Capacity Matrix (3 Labs • Strictly 30 Seats Each • Shared Across All Courses) */}
+      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-teal-500/10 text-teal-400 border border-teal-500/30">
+                Physical Campus Infrastructure
+              </span>
+              <span className="text-xs text-slate-400 font-medium">
+                • 3 Labs (Lab 1, Lab 2, Lab 3) • Strictly 30 Seats Per Lab
+              </span>
+            </div>
+            <h2 className="text-lg font-bold text-white mt-1 flex items-center space-x-2">
+              <Building className="w-5 h-5 text-teal-400" />
+              <span>Campus Physical Labs & Live Slot Occupancy</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Strictly 30 seats per physical lab (90 seats per time window across all 3 labs • 450 seats daily campus capacity). All courses share these exact physical lab seats.
+            </p>
+          </div>
+          <Link
+            to="/admin/attendance"
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold text-xs border border-slate-700 transition flex items-center space-x-1.5 self-start md:self-auto"
+          >
+            <UserCheck className="w-4 h-4 text-teal-400" />
+            <span>Open Comprehensive Lab Attendance</span>
+          </Link>
+        </div>
+
+        {/* 5 Collegiate Time Windows Matrix */}
+        <div className="space-y-3">
+          {STANDARD_TIME_WINDOWS.map((win) => {
+            const slotsInWindow = collegiateSlots.filter(
+              (s) => s.timeWindow === win || s.timeWindow?.includes(win.split(' ')[0])
+            );
+            const windowDate = slotsInWindow[0]?.startTime;
+            return (
+              <div key={win} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs font-semibold text-slate-300">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-3.5 h-3.5 text-teal-400" />
+                    <span>
+                      Date: <strong className="text-teal-300 font-bold">{formatSlotDate(windowDate)}</strong> • Time Window: <strong className="text-white">{win}</strong>
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Window Capacity: 90 Seats (30 seats × 3 Labs) • Shared Across All Courses
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  {['Lab 1', 'Lab 2', 'Lab 3'].map((labName) => {
+                    const slot = slotsInWindow.find((s) => s.labName === labName);
+                    const registeredCount = slot?.registeredCount || 0;
+                    const capacity = slot?.capacity || 30;
+                    const pct = Math.min(100, Math.round((registeredCount / capacity) * 100));
+                    const isFull = registeredCount >= capacity;
+
+                    return (
+                      <Link
+                        key={labName}
+                        to={`/admin/attendance?timing=${encodeURIComponent(win)}&lab=${encodeURIComponent(labName)}`}
+                        className={`p-3.5 rounded-xl border transition block group ${
+                          isFull
+                            ? 'bg-rose-950/20 border-rose-800/50 hover:border-rose-700'
+                            : 'bg-slate-900 border-slate-800 hover:border-teal-500/60'
+                        }`}
+                        title={`Click to view students taking tests in ${labName} during ${win}`}
+                      >
+                        <div className="flex items-center justify-between font-bold text-white group-hover:text-teal-300 transition">
+                          <span className="flex items-center space-x-1.5">
+                            <Building className="w-3.5 h-3.5 text-teal-400" />
+                            <span>{labName}</span>
+                          </span>
+                          <span className={isFull ? 'text-rose-400 font-mono font-bold' : 'text-teal-400 font-mono font-bold'}>
+                            {registeredCount} / {capacity} seats
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isFull ? 'bg-rose-500' : pct > 75 ? 'bg-amber-400' : 'bg-teal-400'
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2">
+                          <span>{isFull ? 'Full (0 seats free)' : `${capacity - registeredCount} seats free`}</span>
+                          <span className="text-teal-400/80 group-hover:underline">View Lab Roster →</span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Courses & Level Examinations */}
       <div className="grid grid-cols-1 gap-6">
         {exams.map((exam) => (
           <div
@@ -253,13 +371,6 @@ export const ExamManagement: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setShowAddSlotModal(exam._id)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 transition"
-                >
-                  + Add Slot
-                </button>
-
-                <button
                   onClick={() => handleTogglePublish(exam._id, exam.isPublished)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
                     exam.isPublished
@@ -272,30 +383,19 @@ export const ExamManagement: React.FC = () => {
               </div>
             </div>
 
-            {/* Slots Matrix */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-3 border-t border-slate-800/80 text-xs">
-              {exam.slots?.map((slot: any) => (
-                <Link
-                  key={slot._id}
-                  to={`/admin/attendance?examId=${exam._id}&slotId=${slot._id}`}
-                  className="p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-teal-500/60 space-y-1 block transition group"
-                  title="Click to view and mark attendance for this slot"
-                >
-                  <div className="flex items-center justify-between font-semibold text-white group-hover:text-teal-300 transition">
-                    <span>{slot.slotName}</span>
-                    <span className="text-teal-400 font-mono">
-                      {slot.registeredCount}/{slot.capacity}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 flex items-center space-x-1">
-                    <Clock className="w-3 h-3 text-slate-500" />
-                    <span>
-                      {new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -{' '}
-                      {new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </Link>
-              ))}
+            {/* Shared Physical Lab Allocation Details */}
+            <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+              <div className="flex items-center space-x-2">
+                <Building className="w-4 h-4 text-teal-400 shrink-0" />
+                <span>
+                  Physical Lab Allocation: <strong className="text-white">Lab 1, Lab 2, Lab 3</strong> (Strictly 30 seats/lab shared across all courses)
+                </span>
+              </div>
+              <div className="flex items-center space-x-4">
+                <span>Duration: <strong className="text-white">{exam.durationMinutes || 60} mins</strong></span>
+                <span>Cutoff: <strong className="text-emerald-400">{exam.passingPercentage || 100}%</strong></span>
+                <span>Total Enrolled: <strong className="text-teal-400">{exam.registeredCount || 0} students</strong></span>
+              </div>
             </div>
           </div>
         ))}

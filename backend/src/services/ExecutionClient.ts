@@ -37,6 +37,7 @@ export interface WorkerExecutionResponse {
   totalExecutionTimeMs: number;
   peakMemoryKb: number;
   error?: string;
+  errorLog?: string;
 }
 
 const WORKER_URL = process.env.EXECUTION_WORKER_URL || 'http://localhost:5050';

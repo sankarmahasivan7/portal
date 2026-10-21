@@ -218,14 +218,11 @@ export class ProgressionService {
     }
 
     // Check if result already computed (idempotency check)
-    let result = await ExaminationResult.findOne({ sessionId: session._id });
+    let result: any = await ExaminationResult.findOne({ sessionId: session._id });
     if (!result) {
       // Calculate scores from all submissions under this session
       const { Submission } = await import('../models/Submission');
       const submissions = await Submission.find({ sessionId: session._id });
-
-      let totalExamMarks = 0;
-      let obtainedExamMarks = 0;
 
       // Group submissions by question and take highest or latest submission per question
       const questionMap = new Map<string, any>();
@@ -237,33 +234,63 @@ export class ProgressionService {
         }
       }
 
-      for (const qId of exam.questions) {
+      let rawTotalMarks = 0;
+      let rawObtainedMarks = 0;
+
+      const targetQuestionIds =
+        session.assignedQuestions && session.assignedQuestions.length > 0
+          ? session.assignedQuestions
+          : exam.questions;
+
+      for (const qId of targetQuestionIds) {
         const sub = questionMap.get(qId.toString());
         const maxQMarks = sub ? sub.maxScore : 100;
-        totalExamMarks += maxQMarks;
-        obtainedExamMarks += sub ? sub.score : 0;
+        rawTotalMarks += maxQMarks;
+        rawObtainedMarks += sub ? sub.score : 0;
       }
 
       // Default baseline if exam had no questions configured
-      if (totalExamMarks === 0) totalExamMarks = 100;
+      if (rawTotalMarks === 0) rawTotalMarks = 100;
 
-      const percentage = Math.round((obtainedExamMarks / totalExamMarks) * 100);
+      const percentage = Math.round((rawObtainedMarks / rawTotalMarks) * 100);
       const passed = percentage >= exam.passingPercentage;
 
-      result = await ExaminationResult.create({
-        sessionId: session._id,
-        examinationId: exam._id,
-        studentId: session.studentId,
-        languageId: exam.languageId._id,
-        levelNumber: exam.levelNumber,
-        totalMarks: totalExamMarks,
-        obtainedMarks: obtainedExamMarks,
-        percentage,
-        passed,
-        passingPercentageRequired: exam.passingPercentage,
-        submissions: submissions.map((s) => s._id),
-        verifiedAt: new Date()
-      });
+      // STRICT RULE: Examination is always strictly 100 marks total
+      const totalExamMarks = 100;
+      const obtainedExamMarks = percentage;
+
+      // STRICT RULE: Only store students that passed in ExaminationResult; never store failed attempts
+      if (passed) {
+        result = await ExaminationResult.create({
+          sessionId: session._id,
+          examinationId: exam._id,
+          studentId: session.studentId,
+          languageId: exam.languageId._id,
+          levelNumber: exam.levelNumber,
+          totalMarks: totalExamMarks,
+          obtainedMarks: obtainedExamMarks,
+          percentage,
+          passed: true,
+          passingPercentageRequired: exam.passingPercentage,
+          submissions: submissions.map((s) => s._id),
+          verifiedAt: new Date()
+        });
+      } else {
+        result = {
+          sessionId: session._id,
+          examinationId: exam._id,
+          studentId: session.studentId,
+          languageId: exam.languageId._id,
+          levelNumber: exam.levelNumber,
+          totalMarks: totalExamMarks,
+          obtainedMarks: obtainedExamMarks,
+          percentage,
+          passed: false,
+          passingPercentageRequired: exam.passingPercentage,
+          submissions: submissions.map((s) => s._id),
+          verifiedAt: new Date()
+        };
+      }
 
       await logAudit(
         'EXAM_RESULT_CALCULATED',

@@ -9,14 +9,19 @@ import {
   Eye,
   Trash2,
   X,
-  FileCode
+  FileCode,
+  Shuffle,
+  Filter,
+  Layers
 } from 'lucide-react';
 
 export const QuestionBank: React.FC = () => {
   const [questions, setQuestions] = useState<any[]>([]);
+  const [languages, setLanguages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
+  const [courseFilter, setCourseFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -27,6 +32,7 @@ export const QuestionBank: React.FC = () => {
     constraints: '',
     exampleInput: '',
     exampleOutput: '',
+    languageId: '',
     targetLevel: 1,
     difficulty: 'Easy',
     marks: 100,
@@ -36,15 +42,26 @@ export const QuestionBank: React.FC = () => {
     hiddenOutput: ''
   });
 
-  const fetchQuestions = async () => {
+  const fetchQuestionsAndLanguages = async () => {
     try {
       setIsLoading(true);
-      const url = `/admin/questions?search=${encodeURIComponent(search)}${
-        levelFilter ? `&level=${levelFilter}` : ''
-      }`;
-      const res = await api.get(url);
-      if (res.data.success) {
-        setQuestions(res.data.questions);
+      let url = `/admin/questions?search=${encodeURIComponent(search)}`;
+      if (levelFilter) url += `&level=${levelFilter}`;
+      if (courseFilter) url += `&languageId=${courseFilter}`;
+
+      const [qRes, lRes] = await Promise.all([
+        api.get(url),
+        api.get('/admin/languages')
+      ]);
+
+      if (qRes.data.success) {
+        setQuestions(qRes.data.questions);
+      }
+      if (lRes.data.success) {
+        setLanguages(lRes.data.languages);
+        if (!formData.languageId && lRes.data.languages.length > 0) {
+          setFormData((prev) => ({ ...prev, languageId: lRes.data.languages[0]._id }));
+        }
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error fetching questions.');
@@ -54,12 +71,17 @@ export const QuestionBank: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchQuestions();
-  }, [search, levelFilter]);
+    fetchQuestionsAndLanguages();
+  }, [search, levelFilter, courseFilter]);
 
   const handleCreateQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const selectedLang = languages.find((l) => l._id === formData.languageId);
+      const allowedLangs = selectedLang?.executionEngineId
+        ? [selectedLang.executionEngineId, 'c', 'cpp', 'java', 'python']
+        : ['c', 'cpp', 'java', 'python', 'javascript'];
+
       const payload = {
         title: formData.title,
         description: formData.description,
@@ -73,10 +95,11 @@ export const QuestionBank: React.FC = () => {
             explanation: 'Sample Case'
           }
         ],
+        languageId: formData.languageId || undefined,
         targetLevel: Number(formData.targetLevel),
         difficulty: formData.difficulty,
         marks: Number(formData.marks),
-        allowedLanguages: ['c', 'cpp', 'java', 'python', 'javascript'],
+        allowedLanguages: allowedLangs,
         testCases: [
           {
             input: formData.publicInput || formData.exampleInput,
@@ -96,7 +119,24 @@ export const QuestionBank: React.FC = () => {
       const res = await api.post('/admin/questions', payload);
       if (res.data.success) {
         setShowCreateModal(false);
-        fetchQuestions();
+        setFormData({
+          title: '',
+          description: '',
+          inputFormat: '',
+          outputFormat: '',
+          constraints: '',
+          exampleInput: '',
+          exampleOutput: '',
+          languageId: languages[0]?._id || '',
+          targetLevel: 1,
+          difficulty: 'Easy',
+          marks: 100,
+          publicInput: '',
+          publicOutput: '',
+          hiddenInput: '',
+          hiddenOutput: ''
+        });
+        fetchQuestionsAndLanguages();
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to create question.');
@@ -104,10 +144,10 @@ export const QuestionBank: React.FC = () => {
   };
 
   const handleArchive = async (id: string) => {
-    if (!window.confirm('Archive this question?')) return;
+    if (!window.confirm('Archive this question? It will no longer be assigned to exam sessions.')) return;
     try {
       await api.delete(`/admin/questions/${id}`);
-      fetchQuestions();
+      fetchQuestionsAndLanguages();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Archive error.');
     }
@@ -119,25 +159,36 @@ export const QuestionBank: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center space-x-2.5">
             <BookOpen className="w-6 h-6 text-teal-400" />
-            <span>Question Bank & Benchmark Test Suites</span>
+            <span>Question Bank & Multi-Question Benchmark Suites</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Author programming questions, constraints, public examples, and hidden test cases.
+            Author multi-question pools per course & level. Each candidate session receives an independently shuffled 2-question subset.
           </p>
         </div>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold text-xs flex items-center space-x-1.5 shadow-md transition"
+          className="px-4 py-2 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold text-xs flex items-center space-x-1.5 shadow-md shadow-teal-500/10 transition"
         >
           <Plus className="w-4 h-4" />
-          <span>Create New Problem</span>
+          <span>Create Problem</span>
         </button>
       </div>
 
+      {/* Info Callout about Shuffling & Multi-Questions */}
+      <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-200 text-xs flex items-start space-x-2.5">
+        <Shuffle className="w-4 h-4 text-teal-400 flex-shrink-0 mt-0.5" />
+        <div>
+          <strong className="text-teal-300 font-semibold block mb-0.5">Automated Per-Student Question Shuffling Active:</strong>
+          <span>
+            You can assign multiple questions to the same course and level. The exam engine dynamically samples and shuffles 2 questions from this pool for each student session, preventing duplicate questions across adjacent lab terminals.
+          </span>
+        </div>
+      </div>
+
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 bg-slate-900 p-2.5 rounded-2xl border border-slate-800 flex items-center space-x-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-slate-900 p-2.5 rounded-2xl border border-slate-800 flex items-center space-x-2">
           <Search className="w-4 h-4 text-slate-500 ml-2" />
           <input
             type="text"
@@ -149,6 +200,19 @@ export const QuestionBank: React.FC = () => {
         </div>
 
         <select
+          value={courseFilter}
+          onChange={(e) => setCourseFilter(e.target.value)}
+          className="bg-slate-900 border border-slate-800 rounded-2xl text-xs text-white px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-teal-500"
+        >
+          <option value="">All Courses & Tracks</option>
+          {languages.map((l) => (
+            <option key={l._id} value={l._id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+
+        <select
           value={levelFilter}
           onChange={(e) => setLevelFilter(e.target.value)}
           className="bg-slate-900 border border-slate-800 rounded-2xl text-xs text-white px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -157,61 +221,74 @@ export const QuestionBank: React.FC = () => {
           <option value="1">Level 1 (Fundamentals)</option>
           <option value="2">Level 2 (Data Structures)</option>
           <option value="3">Level 3 (Algorithms)</option>
-          <option value="4">Level 4 (Advanced)</option>
+          <option value="4">Level 4 (Advanced Logic)</option>
+          <option value="5">Level 5 (Optimization)</option>
+          <option value="6">Level 6 (Mastery)</option>
         </select>
       </div>
 
       {/* Questions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {questions.map((q) => (
-          <div
-            key={q._id}
-            className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col justify-between space-y-4 hover:border-slate-700 transition"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-mono font-bold uppercase text-teal-400">
-                  Level {q.targetLevel} • {q.difficulty}
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-                  {q.marks} Marks
-                </span>
-              </div>
-
-              <h3 className="text-lg font-bold text-white mb-2">{q.title}</h3>
-              <p className="text-xs text-slate-400 line-clamp-3 mb-3">{q.description}</p>
-
-              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/80 font-mono text-[11px]">
-                <span className="text-slate-500">Test Cases:</span>
-                <span className="text-emerald-400">
-                  {q.testCases?.filter((t: any) => !t.isHidden).length || 0} Public
-                </span>
-                <span className="text-slate-600">•</span>
-                <span className="text-amber-400">
-                  {q.testCases?.filter((t: any) => t.isHidden).length || 0} Hidden
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500 font-mono uppercase">
-                {q.allowedLanguages?.join(', ')}
-              </span>
-              <button
-                onClick={() => handleArchive(q._id)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                title="Archive problem"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+        {questions.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-slate-500 text-xs">
+            No problems found for the selected course and level criteria. Click "Create Problem" to add one!
           </div>
-        ))}
+        ) : (
+          questions.map((q) => (
+            <div
+              key={q._id}
+              className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col justify-between space-y-4 hover:border-slate-700 transition"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/30">
+                      {q.languageId?.name || 'General Track'}
+                    </span>
+                    <span className="text-xs font-mono font-bold uppercase text-slate-400">
+                      L{q.targetLevel} • {q.difficulty}
+                    </span>
+                  </div>
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                    {q.marks} Marks
+                  </span>
+                </div>
+
+                <h3 className="text-lg font-bold text-white mb-2">{q.title}</h3>
+                <p className="text-xs text-slate-400 line-clamp-3 mb-3">{q.description}</p>
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/80 font-mono text-[11px]">
+                  <span className="text-slate-500">Test Cases:</span>
+                  <span className="text-emerald-400">
+                    {q.testCases?.filter((t: any) => !t.isHidden).length || 0} Public
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-amber-400">
+                    {q.testCases?.filter((t: any) => t.isHidden).length || 0} Hidden
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <span className="text-[11px] text-slate-500 font-mono uppercase truncate max-w-[200px]">
+                  {q.allowedLanguages?.join(', ')}
+                </span>
+                <button
+                  onClick={() => handleArchive(q._id)}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                  title="Archive problem"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Create Problem Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center space-x-2">
@@ -224,6 +301,40 @@ export const QuestionBank: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateQuestion} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1 font-semibold">Course / Track</label>
+                  <select
+                    value={formData.languageId}
+                    onChange={(e) => setFormData({ ...formData, languageId: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
+                  >
+                    <option value="">General (All Languages)</option>
+                    {languages.map((l) => (
+                      <option key={l._id} value={l._id}>
+                        {l.name} ({l.totalLevels} Levels)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1 font-semibold">Curriculum Target Level</label>
+                  <select
+                    value={formData.targetLevel}
+                    onChange={(e) => setFormData({ ...formData, targetLevel: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
+                  >
+                    <option value={1}>Level 1 (Fundamentals)</option>
+                    <option value={2}>Level 2 (Data Structures)</option>
+                    <option value={3}>Level 3 (Algorithms)</option>
+                    <option value={4}>Level 4 (Advanced)</option>
+                    <option value={5}>Level 5 (Optimization)</option>
+                    <option value={6}>Level 6 (Mastery)</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-slate-400 mb-1 font-semibold">Problem Title</label>
                 <input
@@ -243,7 +354,7 @@ export const QuestionBank: React.FC = () => {
                   rows={3}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe the problem, inputs, and desired algorithm clearly..."
+                  placeholder="Describe the problem, input specifications, and expected solution..."
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
                 />
               </div>
@@ -286,18 +397,15 @@ export const QuestionBank: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1 font-semibold">Target Level</label>
+                  <label className="block text-slate-400 mb-1 font-semibold">Difficulty</label>
                   <select
-                    value={formData.targetLevel}
-                    onChange={(e) => setFormData({ ...formData, targetLevel: Number(e.target.value) })}
+                    value={formData.difficulty}
+                    onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white"
                   >
-                    <option value={1}>Level 1</option>
-                    <option value={2}>Level 2</option>
-                    <option value={3}>Level 3</option>
-                    <option value={4}>Level 4</option>
-                    <option value={5}>Level 5</option>
-                    <option value={6}>Level 6</option>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
                   </select>
                 </div>
                 <div>
@@ -363,7 +471,7 @@ export const QuestionBank: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-teal-400 text-slate-950 font-bold text-xs"
+                  className="px-4 py-2 rounded-xl bg-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/10"
                 >
                   Create Problem
                 </button>
@@ -375,4 +483,3 @@ export const QuestionBank: React.FC = () => {
     </div>
   );
 };
-

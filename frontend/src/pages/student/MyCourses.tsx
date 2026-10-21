@@ -15,8 +15,10 @@ import {
   Layers,
   ChevronRight,
   AlertCircle,
-  XCircle
+  XCircle,
+  History
 } from 'lucide-react';
+import { formatSlotDate } from '../../utils/dateUtils';
 
 interface RegisteredSlot {
   slotId: string;
@@ -68,6 +70,8 @@ export const MyCourses: React.FC = () => {
   const [currentlyRegisteredCount, setCurrentlyRegisteredCount] = useState(0);
   const [registeredExams, setRegisteredExams] = useState<RegisteredExam[]>([]);
   const [courses, setCourses] = useState<CourseProgression[]>([]);
+  const [slotHistory, setSlotHistory] = useState<any[]>([]);
+  const [showSlotHistory, setShowSlotHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -85,11 +89,18 @@ export const MyCourses: React.FC = () => {
     const fetchMyCourses = async () => {
       try {
         setIsLoading(true);
-        const res = await api.get('/student/my-courses');
-        if (res.data.success) {
-          setCurrentlyRegisteredCount(res.data.currentlyRegisteredCount);
-          setRegisteredExams(res.data.registeredExams);
-          setCourses(res.data.courses);
+        const [coursesRes, historyRes] = await Promise.allSettled([
+          api.get('/student/my-courses'),
+          api.get('/student/slot-history')
+        ]);
+
+        if (coursesRes.status === 'fulfilled' && coursesRes.value.data.success) {
+          setCurrentlyRegisteredCount(coursesRes.value.data.currentlyRegisteredCount);
+          setRegisteredExams(coursesRes.value.data.registeredExams);
+          setCourses(coursesRes.value.data.courses);
+        }
+        if (historyRes.status === 'fulfilled' && historyRes.value.data.success) {
+          setSlotHistory(historyRes.value.data.slotHistory || []);
         }
       } catch (err: any) {
         setError(err.response?.data?.message || 'Failed to load enrolled courses.');
@@ -173,14 +184,103 @@ export const MyCourses: React.FC = () => {
               </p>
             </div>
 
-            <Link
-              to="/student/total-courses"
-              className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition shadow-sm flex items-center space-x-1.5"
-            >
-              <span>Explore Total Courses</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            <div className="flex items-center space-x-2.5">
+              <Link
+                to="/student/slot-history"
+                className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition shadow-sm flex items-center space-x-1.5"
+              >
+                <History className="w-3.5 h-3.5 text-teal-600" />
+                <span>Slot History ({slotHistory.length})</span>
+              </Link>
+
+              <Link
+                to="/student/total-courses"
+                className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition shadow-sm flex items-center space-x-1.5"
+              >
+                <span>Explore Total Courses</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
+
+          {/* Collapsible Slot Booking History Panel */}
+          {showSlotHistory && (
+            <div className="bg-white rounded-2xl border border-teal-200 shadow-sm p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center space-x-2">
+                  <History className="w-5 h-5 text-teal-600" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    My Slot Booking History
+                  </h3>
+                </div>
+                <Link
+                  to="/student/slot-history"
+                  className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center space-x-1"
+                >
+                  <span>View Full Marks History Page</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+
+              {slotHistory.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                  No slot bookings recorded yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {slotHistory.map((item, idx) => (
+                    <div
+                      key={item.registrationId || idx}
+                      className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition space-y-2.5 text-xs shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">
+                          {item.languageName} - Level {item.levelNumber}
+                        </span>
+                        {item.attendanceStatus === 'present' ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Present</span>
+                          </span>
+                        ) : item.attendanceStatus === 'absent' ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                            <XCircle className="w-3 h-3 text-rose-600" />
+                            <span>Absent</span>
+                          </span>
+                        ) : item.status === 'attended' ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                            <span>Attended</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            <span>Pending in Lab</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200/60">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 text-[11px]">Time Window:</span>
+                          <strong className="text-slate-800">{item.slotTiming}</strong>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 text-[11px]">Assigned Lab:</span>
+                          <strong className="text-slate-800">{item.labName}</strong>
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] text-slate-400 border-t border-slate-200/60 pt-1.5 flex items-center justify-between">
+                        <span>Booked on {new Date(item.registeredAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        <span>{new Date(item.registeredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {visibleCourses.length === 0 ? (
             /* Empty state when student hasn't registered for any course yet */
@@ -244,27 +344,26 @@ export const MyCourses: React.FC = () => {
                       {course.levels
                         .filter((lvl) => lvl.status !== 'Passed' && lvl.status !== 'Failed')
                         .map((lvl) => {
-                          const isRegistered = lvl.status === 'Registered';
                           const matchingReg = registeredExams.find(
-                            (r) => r.languageId === course.languageId && r.levelNumber === lvl.levelNumber
+                            (r) =>
+                              (String(r.languageId) === String(course.languageId) || String((r as any).languageSlug) === String(course.slug)) &&
+                              Number(r.levelNumber) === Number(lvl.levelNumber)
                           );
+                          const hasBookedSlot = Boolean(lvl.status === 'Registered' || matchingReg);
                           const isAbsent = matchingReg?.attendanceStatus === 'absent';
 
                           return (
                             <div
                               key={lvl.levelNumber}
                               onClick={() => {
-                                if (!isAbsent) {
-                                  navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`);
-                                }
+                                navigate(`/student/course/${course.slug}/level/${lvl.levelNumber}`);
                               }}
-                              className={`rounded-2xl p-4 border transition-all flex flex-col justify-between space-y-3 group ${
+                              className={`rounded-2xl p-4 border transition-all flex flex-col justify-between space-y-3 group cursor-pointer ${
                                 isAbsent
-                                  ? 'bg-rose-50/40 border-rose-200 cursor-not-allowed'
-                                  : 'cursor-pointer ' +
-                                    (isRegistered
-                                      ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
-                                      : 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm')
+                                  ? 'bg-rose-50/40 border-rose-200 hover:border-rose-300 hover:shadow-sm'
+                                  : hasBookedSlot
+                                  ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300 hover:shadow-sm'
+                                  : 'bg-teal-50/40 border-teal-200 hover:border-teal-300 hover:shadow-sm'
                               }`}
                             >
                             <div className="flex items-start justify-between">
@@ -283,7 +382,7 @@ export const MyCourses: React.FC = () => {
                                   <XCircle className="w-3.5 h-3.5" />
                                   <span>Marked Absent</span>
                                 </span>
-                              ) : isRegistered ? (
+                              ) : hasBookedSlot ? (
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
                                   <Clock className="w-3.5 h-3.5" />
                                   <span>Slot Booked</span>
@@ -296,26 +395,49 @@ export const MyCourses: React.FC = () => {
                               )}
                             </div>
 
+                            {/* Booked Slot Timing & Lab Info if Booked */}
+                            {hasBookedSlot && matchingReg?.slot && (
+                              <div className="bg-white/80 p-2.5 rounded-xl border border-blue-200/60 text-xs space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-slate-500 font-medium">Exam Date:</span>
+                                  <strong className="text-teal-800 font-bold">{formatSlotDate(matchingReg.slot.startTime)}</strong>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-slate-500 font-medium">Slot Timing:</span>
+                                  <strong className="text-slate-900 font-bold">{matchingReg.slot.timeWindow}</strong>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-slate-500 font-medium">Assigned Lab:</span>
+                                  <strong className="text-slate-900 font-bold">{matchingReg.slot.labName}</strong>
+                                </div>
+                              </div>
+                            )}
+
                             <p className="text-xs text-slate-500 line-clamp-2">
                               {isAbsent
                                 ? 'Marked absent by staff. Only an administrator can remove this course so you can register again.'
-                                : isRegistered
-                                ? 'Slot booked! Click to view lecture notes or enter the assessment room.'
+                                : hasBookedSlot
+                                ? 'Slot booked! Click to view study material, lecture notes, or enter exam room.'
                                 : 'Registered ongoing level! Click to watch course videos and select your preferred examination slot.'}
                             </p>
 
                             {isAbsent ? (
-                              <div className="pt-2 border-t border-rose-200/60 flex items-center justify-between text-xs font-semibold text-rose-700">
+                              <div className="pt-2 border-t border-rose-200/60 flex items-center justify-between text-xs font-semibold text-rose-700 group-hover:translate-x-0.5 transition-transform">
                                 <span className="flex items-center space-x-1">
                                   <AlertCircle className="w-3.5 h-3.5" />
-                                  <span>Admin Review Required</span>
+                                  <span>View Level Details & Absent Status</span>
                                 </span>
+                                <ArrowRight className="w-3.5 h-3.5" />
                               </div>
                             ) : (
                               <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-semibold text-teal-700 group-hover:translate-x-0.5 transition-transform">
                                 <span className="flex items-center space-x-1">
                                   <PlayCircle className="w-3.5 h-3.5" />
-                                  <span>Watch Videos & Book Exam Slot</span>
+                                  <span>
+                                    {hasBookedSlot
+                                      ? 'Study Material & Booked Slot Details'
+                                      : 'Watch Videos & Book Exam Slot'}
+                                  </span>
                                 </span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </div>

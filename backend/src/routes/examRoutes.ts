@@ -12,7 +12,8 @@ import {
   submitQuestionAnswer,
   finalizeSession,
   finalizeSessionWithFeedback,
-  getSessionResult
+  getSessionResult,
+  terminateSessionOnTabSwitch
 } from '../controllers/examController';
 import { authenticate } from '../middleware/auth';
 import { checkCollegeNetwork } from '../middleware/ipCheck';
@@ -37,6 +38,7 @@ router.post('/session/:sessionId/run', checkCollegeNetwork, verifySafeExamBrowse
 router.post('/session/:sessionId/submit', checkCollegeNetwork, verifySafeExamBrowser, submitQuestionAnswer);
 router.post('/session/:sessionId/finalize', checkCollegeNetwork, finalizeSession);
 router.post('/session/:sessionId/finalize-with-feedback', checkCollegeNetwork, finalizeSessionWithFeedback);
+router.post('/session/:sessionId/tab-violation', checkCollegeNetwork, terminateSessionOnTabSwitch);
 router.get('/session/:sessionId/result', getSessionResult);
 
 export default router;

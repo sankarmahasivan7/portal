@@ -29,8 +29,22 @@ if (!fs.existsSync(SANDBOX_BASE)) {
   fs.mkdirSync(SANDBOX_BASE, { recursive: true });
 }
 
+function stripAnsi(str: string): string {
+  if (!str) return '';
+  return str.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '');
+}
+
+function cleanDiagnostics(text: string, sandboxDir: string): string {
+  if (!text) return '';
+  const noAnsi = stripAnsi(text);
+  // Replace absolute sandbox path with clean relative filename
+  const escaped = sandboxDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escaped + '[\\\\/]?', 'gi');
+  return noAnsi.replace(regex, '').trim();
+}
+
 function normalizeOutput(str: string): string {
-  return str
+  return stripAnsi(str)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n')
@@ -78,7 +92,13 @@ function executeProcess(
     const child = spawn(command, args, {
       cwd,
       windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        NODE_DISABLE_COLORS: '1',
+        FORCE_COLOR: '0',
+        PYTHONUNBUFFERED: '1'
+      }
     });
 
     const timer = setTimeout(() => {
@@ -170,7 +190,7 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
       case 'c':
         sourceFileName = 'main.c';
         compileCommand = GCC_PATH;
-        compileArgs = ['main.c', '-O2', '-o', 'solution.exe', '-lm'];
+        compileArgs = ['main.c', '-O2', '-static', '-static-libgcc', '-o', 'solution.exe', '-lm'];
         runCommand = path.join(sandboxDir, 'solution.exe');
         runArgs = [];
         break;
@@ -178,7 +198,7 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
       case 'cpp':
         sourceFileName = 'main.cpp';
         compileCommand = GPP_PATH;
-        compileArgs = ['main.cpp', '-O2', '-std=c++17', '-o', 'solution.exe', '-lm'];
+        compileArgs = ['main.cpp', '-O2', '-std=c++17', '-static', '-static-libgcc', '-static-libstdc++', '-o', 'solution.exe', '-lm'];
         runCommand = path.join(sandboxDir, 'solution.exe');
         runArgs = [];
         break;
@@ -212,7 +232,8 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
           passedTests: 0,
           totalExecutionTimeMs: 0,
           peakMemoryKb: 0,
-          error: `Unsupported programming language: ${language}`
+          error: `Unsupported programming language: ${language}`,
+          errorLog: `Unsupported programming language: ${language}`
         };
     }
 
@@ -224,10 +245,13 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
     if (compileCommand) {
       const compileRes = await executeProcess(compileCommand, compileArgs, sandboxDir, '', 10000);
       if (compileRes.exitCode !== 0) {
+        const rawOutput = (compileRes.stderr || compileRes.stdout).trim();
+        const cleaned = cleanDiagnostics(rawOutput, sandboxDir);
         return {
           success: false,
           verdict: 'Compilation Error',
-          compileOutput: (compileRes.stderr || compileRes.stdout).trim(),
+          compileOutput: cleaned,
+          errorLog: cleaned,
           testCaseResults: [],
           totalTests: testCases.length,
           passedTests: 0,
@@ -242,6 +266,7 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
     let overallVerdict: ExecutionVerdict = 'Accepted';
     let passedTests = 0;
     let totalTime = 0;
+    let firstErrorLog = '';
 
     for (let i = 0; i < testCases.length; i++) {
       const tc = testCases[i];
@@ -256,7 +281,8 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
         errorMsg = `Execution timed out after ${timeLimitMs}ms`;
       } else if (execRes.exitCode !== 0) {
         tcVerdict = 'Runtime Error';
-        errorMsg = execRes.stderr.trim() || `Process exited with error code ${execRes.exitCode}`;
+        const rawErr = (execRes.stderr || execRes.stdout).trim();
+        errorMsg = cleanDiagnostics(rawErr, sandboxDir) || `Process exited with error code ${execRes.exitCode}`;
       } else {
         const actual = normalizeOutput(execRes.stdout);
         const expected = normalizeOutput(tc.expectedOutput);
@@ -272,6 +298,10 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
         overallVerdict = tcVerdict;
       }
 
+      if (errorMsg && !firstErrorLog) {
+        firstErrorLog = errorMsg;
+      }
+
       testCaseResults.push({
         testCaseId: tc.id || `tc_${i + 1}`,
         passed: tcVerdict === 'Accepted',
@@ -285,8 +315,9 @@ export async function runIsolatedJob(req: ExecutionJobRequest): Promise<Executio
     }
 
     return {
-      success: true,
+      success: overallVerdict === 'Accepted',
       verdict: overallVerdict,
+      errorLog: firstErrorLog || undefined,
       testCaseResults,
       totalTests: testCases.length,
       passedTests,

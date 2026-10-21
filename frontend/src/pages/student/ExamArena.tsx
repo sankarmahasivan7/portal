@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import api from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 import {
   Clock,
   Play,
@@ -22,12 +23,59 @@ import {
   RefreshCw,
   ArrowLeft,
   UserCheck,
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert,
+  Lock,
+  Users,
+  MonitorOff,
+  AlertCircle,
+  ArrowRight
 } from 'lucide-react';
+
+interface DisciplinaryRule {
+  id: string;
+  title: string;
+  description: string;
+  icon: any;
+}
+
+const DISCIPLINARY_RULES: DisciplinaryRule[] = [
+  {
+    id: 'silence',
+    title: 'Lab Decorum & Strict Silence',
+    description: 'I will maintain absolute silence in the examination laboratory and will not talk, whisper, gesture, or attempt to communicate with any other student.',
+    icon: Users
+  },
+  {
+    id: 'no_devices',
+    title: 'No Prohibited Electronic Devices',
+    description: 'I confirm that I do not have cell phones, smart watches, earphones, bluetooth devices, or unauthorized physical notes in my possession at the examination terminal.',
+    icon: MonitorOff
+  },
+  {
+    id: 'anti_cheating',
+    title: 'Proctoring & No Tab Switching Policy',
+    description: 'I understand that switching browser tabs, minimizing this test window, or opening external programs is strictly prohibited and will immediately terminate my exam.',
+    icon: ShieldAlert
+  },
+  {
+    id: 'original_work',
+    title: 'Independent Original Solutions',
+    description: 'All programming code and logic submitted will be entirely my own original work composed during this active test window without plagiarized material.',
+    icon: Code2
+  },
+  {
+    id: 'disciplinary_compliance',
+    title: 'Disciplinary Action & Score Cancellation',
+    description: 'I accept that any violation of examination conduct or ethical rules will result in immediate disqualification, zero score, and institutional disciplinary action.',
+    icon: ShieldCheck
+  }
+];
 
 export const ExamArena: React.FC = () => {
   const { examId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [session, setSession] = useState<any>(null);
   const [exam, setExam] = useState<any>(null);
@@ -44,93 +92,103 @@ export const ExamArena: React.FC = () => {
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string>('Ready');
 
+  // Rules Checklist & Pre-Test State
+  const [hasStartedExam, setHasStartedExam] = useState(false);
+  const [rulesChecked, setRulesChecked] = useState<Record<string, boolean>>({});
+  const [isStartingTest, setIsStartingTest] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+
   // Console output & tabs
-  const [activeConsoleTab, setActiveConsoleTab] = useState<'tests' | 'input' | 'output'>('tests');
+  const [activeConsoleTab, setActiveConsoleTab] = useState<'tests' | 'errors' | 'input' | 'output'>('tests');
   const [customInput, setCustomInput] = useState<string>('');
   const [consoleOutput, setConsoleOutput] = useState<string>('');
   const [compileError, setCompileError] = useState<string | null>(null);
+  const [errorLog, setErrorLog] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<any[]>([]);
   const [latestVerdict, setLatestVerdict] = useState<string | null>(null);
   const [latestScore, setLatestScore] = useState<number | null>(null);
 
-  // Attendance Gate state
-  const [attendanceRequired, setAttendanceRequired] = useState(false);
-  const [attendanceStatus, setAttendanceStatus] = useState<string>('pending');
+  // Slot & Attendance Metadata
   const [assignedSlot, setAssignedSlot] = useState<any>(null);
-  const [gateMessage, setGateMessage] = useState<string>('');
-  const [isCheckingAttendance, setIsCheckingAttendance] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<string>('present');
 
-  // Initialize or resume examination session
+  // Tab-switch Proctoring Anti-Cheating States
+  const [isTabViolationTerminated, setIsTabViolationTerminated] = useState(false);
+  const [showProctorModal, setShowProctorModal] = useState(false);
+  const [tabViolationSeconds, setTabViolationSeconds] = useState(5);
+  const hasViolatedRef = useRef(false);
+
+  // Populate session, questions, and code editor templates/drafts
+  const populateSessionAndQuestions = (sess: any, ex: any, qs: any[]) => {
+    setSession(sess);
+    setExam(ex);
+    setQuestions(qs);
+    setRemainingSeconds(sess.remainingSeconds);
+
+    const langSlug = ex.languageSlug || 'c';
+    setSelectedLanguage(langSlug);
+
+    const initialCode: Record<string, string> = {};
+    qs.forEach((q: any) => {
+      if (sess.drafts && sess.drafts[q.id]) {
+        initialCode[q.id] = sess.drafts[q.id].code;
+      } else {
+        if (langSlug === 'c') {
+          initialCode[q.id] = `#include <stdio.h>\n\nint main() {\n    // Write your C solution here\n    \n    return 0;\n}\n`;
+        } else if (langSlug === 'cpp') {
+          initialCode[q.id] = `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your C++ solution here\n    \n    return 0;\n}\n`;
+        } else if (langSlug === 'java') {
+          initialCode[q.id] = `import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write your Java solution here\n        \n    }\n}\n`;
+        } else if (langSlug === 'python') {
+          initialCode[q.id] = `import sys\n\ndef main():\n    # Write your Python solution here\n    pass\n\nif __name__ == '__main__':\n    main()\n`;
+        } else {
+          initialCode[q.id] = `// Solution\n`;
+        }
+      }
+    });
+    setCodeMap(initialCode);
+  };
+
+  // Initialize: verify attendance and check if session is already running
   const initSession = async () => {
     try {
       setIsInitializing(true);
 
-      // 1. Verify staff-marked attendance status first
+      // 1. Verify staff-marked attendance status and check for existing active session
       const attRes = await api.get(`/exams/${examId}/attendance-status`);
       if (attRes.data.success && attRes.data.hasRegistration) {
         setAssignedSlot(attRes.data.slot);
         setAttendanceStatus(attRes.data.attendanceStatus);
 
+        // Attendance check: Must be marked Present by lab staff
         if (attRes.data.attendanceStatus !== 'present') {
-          setAttendanceRequired(true);
-          setGateMessage(
+          alert(
             attRes.data.attendanceStatus === 'absent'
               ? 'You have been marked absent by the invigilator for this slot.'
-              : `Attendance verification required. Please report to staff in ${attRes.data.slot?.labName || 'your assigned lab'} to be marked Present before starting the test.`
+              : 'Attendance must be marked Present by lab staff before taking the exam.'
           );
+          navigate(-1);
+          return;
+        }
+
+        // If candidate already has an active session running (e.g. refreshed page during test)
+        if (attRes.data.hasActiveSession && attRes.data.activeSessionId) {
+          const sessionDataRes = await api.get(`/exams/session/${attRes.data.activeSessionId}`);
+          const { session: sess, exam: ex, questions: qs } = sessionDataRes.data;
+          populateSessionAndQuestions(sess, ex, qs);
+          setHasStartedExam(true);
           setIsInitializing(false);
           return;
         }
       }
 
-      // 2. Start or resume session (Server ensures attendanceStatus === 'present')
-      const startRes = await api.post(`/exams/${examId}/start-session`);
-      const sId = startRes.data.sessionId;
-
-      // Reset attendance gate once successfully entered
-      setAttendanceRequired(false);
-
-      // Fetch session data (sanitized questions, server deadline, drafts)
-      const sessionDataRes = await api.get(`/exams/session/${sId}`);
-      const { session: sess, exam: ex, questions: qs } = sessionDataRes.data;
-
-      setSession(sess);
-      setExam(ex);
-      setQuestions(qs);
-      setRemainingSeconds(sess.remainingSeconds);
-
-      const langSlug = ex.languageSlug || 'c';
-      setSelectedLanguage(langSlug);
-
-      // Populate code from drafts or templates
-      const initialCode: Record<string, string> = {};
-      qs.forEach((q: any) => {
-        if (sess.drafts && sess.drafts[q.id]) {
-          initialCode[q.id] = sess.drafts[q.id].code;
-        } else {
-          // Default template
-          if (langSlug === 'c') {
-            initialCode[q.id] = `#include <stdio.h>\n\nint main() {\n    // Write your C solution here\n    \n    return 0;\n}\n`;
-          } else if (langSlug === 'cpp') {
-            initialCode[q.id] = `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your C++ solution here\n    \n    return 0;\n}\n`;
-          } else if (langSlug === 'java') {
-            initialCode[q.id] = `import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write your Java solution here\n        \n    }\n}\n`;
-          } else if (langSlug === 'python') {
-            initialCode[q.id] = `import sys\n\ndef main():\n    # Write your Python solution here\n    pass\n\nif __name__ == '__main__':\n    main()\n`;
-          } else {
-            initialCode[q.id] = `// Solution\n`;
-          }
-        }
-      });
-      setCodeMap(initialCode);
-    } catch (err: any) {
-      if (err.response?.data?.attendancePending) {
-        setAttendanceRequired(true);
-        setAttendanceStatus(err.response.data.attendanceStatus || 'pending');
-        setGateMessage(err.response.data.message);
-        setIsInitializing(false);
-        return;
+      // 2. Fresh start: fetch exam meta details to display in the rules undertaking screen
+      const examRes = await api.get(`/exams/${examId}`);
+      if (examRes.data.success) {
+        setExam(examRes.data.exam);
       }
+      setHasStartedExam(false);
+    } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to initialize examination session.');
       navigate('/student/my-courses');
     } finally {
@@ -142,44 +200,54 @@ export const ExamArena: React.FC = () => {
     initSession();
   }, [examId]);
 
-  // Live auto-polling while waiting for staff to mark attendance
-  useEffect(() => {
-    if (!attendanceRequired || session) return;
+  // Toggle individual rule
+  const handleToggleRule = (id: string) => {
+    setRulesChecked((prev) => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
-    const interval = setInterval(async () => {
-      try {
-        const attRes = await api.get(`/exams/${examId}/attendance-status`);
-        if (attRes.data.success && attRes.data.attendanceStatus === 'present') {
-          // Staff marked present! Automatically transition into test arena!
-          initSession();
-        } else if (attRes.data.success) {
-          setAttendanceStatus(attRes.data.attendanceStatus);
-        }
-      } catch (e) {
-        // ignore background poll errors
-      }
-    }, 4000);
+  // Toggle all rules
+  const allRulesChecked = DISCIPLINARY_RULES.every((rule) => !!rulesChecked[rule.id]);
 
-    return () => clearInterval(interval);
-  }, [attendanceRequired, session, examId]);
+  const handleToggleAllRules = () => {
+    if (allRulesChecked) {
+      setRulesChecked({});
+    } else {
+      const all: Record<string, boolean> = {};
+      DISCIPLINARY_RULES.forEach((r) => {
+        all[r.id] = true;
+      });
+      setRulesChecked(all);
+    }
+  };
 
-  // Manual Check Attendance button handler
-  const handleCheckAttendanceStatus = async () => {
+  // Start Examination session after affirming all rules
+  const handleStartExam = async () => {
+    if (!allRulesChecked) {
+      setStartError('Please review and check all disciplinary rules above to start the exam.');
+      return;
+    }
+
     try {
-      setIsCheckingAttendance(true);
-      const attRes = await api.get(`/exams/${examId}/attendance-status`);
-      if (attRes.data.success && attRes.data.attendanceStatus === 'present') {
-        initSession();
-      } else if (attRes.data.success) {
-        setAttendanceStatus(attRes.data.attendanceStatus);
-        if (attRes.data.attendanceStatus === 'absent') {
-          setGateMessage('You have been marked absent by staff for this slot.');
-        }
-      }
-    } catch (e: any) {
-      alert('Unable to reach attendance verification server.');
+      setIsStartingTest(true);
+      setStartError(null);
+
+      // Start the examination session on the server
+      const startRes = await api.post(`/exams/${examId}/start-session`);
+      const sId = startRes.data.sessionId;
+
+      // Fetch questions, deadline, drafts
+      const sessionDataRes = await api.get(`/exams/session/${sId}`);
+      const { session: sess, exam: ex, questions: qs } = sessionDataRes.data;
+
+      populateSessionAndQuestions(sess, ex, qs);
+      setHasStartedExam(true);
+    } catch (err: any) {
+      setStartError(err.response?.data?.message || 'Failed to start examination session. Please contact invigilator.');
     } finally {
-      setIsCheckingAttendance(false);
+      setIsStartingTest(false);
     }
   };
 
@@ -206,6 +274,49 @@ export const ExamArena: React.FC = () => {
     alert('Examination time has expired! Your code is being automatically submitted for evaluation.');
     await handleFinalSubmit(true);
   };
+
+  // Active Tab-Switch Monitoring (Institutional Anti-Cheating Gate)
+  useEffect(() => {
+    if (!session || session.status !== 'active' || isFinalizing || isTabViolationTerminated || !hasStartedExam) return;
+
+    const handleTabViolation = async () => {
+      if (document.hidden || document.visibilityState === 'hidden') {
+        if (hasViolatedRef.current) return;
+        hasViolatedRef.current = true;
+        setIsTabViolationTerminated(true);
+
+        try {
+          await api.post(`/exams/session/${session.id}/tab-violation`);
+        } catch (err) {
+          console.error('Failed to report tab violation to server', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleTabViolation);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleTabViolation);
+    };
+  }, [session, isFinalizing, isTabViolationTerminated]);
+
+  // Tab Violation Auto-Exit Countdown
+  useEffect(() => {
+    if (!isTabViolationTerminated) return;
+
+    const interval = setInterval(() => {
+      setTabViolationSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          navigate('/student/total-courses');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isTabViolationTerminated]);
 
   // Autosave draft every 30 seconds
   useEffect(() => {
@@ -246,9 +357,9 @@ export const ExamArena: React.FC = () => {
     if (!session || !currentQuestion) return;
     setIsRunning(true);
     setCompileError(null);
+    setErrorLog(null);
     setConsoleOutput('');
     setTestResults([]);
-    setActiveConsoleTab('tests');
 
     try {
       const res = await api.post(`/exams/session/${session.id}/run`, {
@@ -261,11 +372,29 @@ export const ExamArena: React.FC = () => {
       if (res.data.success) {
         const r = res.data.result;
         setLatestVerdict(r.verdict);
+        const err = r.errorLog || r.compileOutput || (r.testCaseResults?.find((tc: any) => !tc.passed && tc.errorMessage)?.errorMessage) || null;
         setCompileError(r.compileOutput || null);
+        setErrorLog(err);
         setTestResults(r.testCaseResults || []);
+
+        // Aggregate standard output streams
+        let outText = '';
         if (customInput && r.testCaseResults?.[0]) {
-          setConsoleOutput(r.testCaseResults[0].actualOutput || '');
+          outText = r.testCaseResults[0].actualOutput || '';
+        } else if (r.testCaseResults && r.testCaseResults.length > 0) {
+          outText = r.testCaseResults
+            .map((tc: any, i: number) => `--- Test Case ${i + 1} (${tc.passed ? 'PASSED' : 'FAILED'}) ---\n${tc.actualOutput || '(no standard output)'}`)
+            .join('\n\n');
+        }
+        setConsoleOutput(outText);
+
+        // Auto-switch tabs: if error occurs, highlight Compiler & Error Logs immediately
+        if (r.verdict === 'Compilation Error' || r.verdict === 'Runtime Error' || (err && r.verdict !== 'Accepted')) {
+          setActiveConsoleTab('errors');
+        } else if (customInput && r.testCaseResults?.[0]) {
           setActiveConsoleTab('output');
+        } else {
+          setActiveConsoleTab('tests');
         }
       }
     } catch (err: any) {
@@ -280,8 +409,8 @@ export const ExamArena: React.FC = () => {
     if (!session || !currentQuestion) return;
     setIsSubmitting(true);
     setCompileError(null);
+    setErrorLog(null);
     setTestResults([]);
-    setActiveConsoleTab('tests');
 
     try {
       const res = await api.post(`/exams/session/${session.id}/submit`, {
@@ -293,8 +422,17 @@ export const ExamArena: React.FC = () => {
       if (res.data.success) {
         setLatestVerdict(res.data.verdict);
         setLatestScore(res.data.score);
+        const err = res.data.errorLog || res.data.compileOutput || (res.data.testCaseResults?.find((tc: any) => !tc.passed && tc.errorMessage)?.errorMessage) || null;
         setCompileError(res.data.compileOutput || null);
+        setErrorLog(err);
         setTestResults(res.data.testCaseResults || []);
+
+        // Auto-switch to errors tab if compilation or runtime error occurred
+        if (res.data.verdict === 'Compilation Error' || res.data.verdict === 'Runtime Error' || (err && res.data.verdict !== 'Accepted')) {
+          setActiveConsoleTab('errors');
+        } else {
+          setActiveConsoleTab('tests');
+        }
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Submission error.');
@@ -345,114 +483,221 @@ export const ExamArena: React.FC = () => {
     );
   }
 
-  // Attendance Verification Gate Screen (Student must be marked Present by lab staff)
-  if (attendanceRequired) {
-    const isPending = attendanceStatus === 'pending';
-    const isAbsent = attendanceStatus === 'absent';
+  // Examination Rules & Disciplinary Undertaking Gate
+  if (!hasStartedExam) {
+    const checkedCount = DISCIPLINARY_RULES.filter((r) => !!rulesChecked[r.id]).length;
+    const allChecked = checkedCount === DISCIPLINARY_RULES.length;
 
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
-        <div className="max-w-xl w-full bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
-                <Building className="w-5 h-5" />
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
+        <div className="max-w-2xl w-full bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+          {/* Card Header */}
+          <div className="p-6 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-inner">
+                <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-base font-extrabold tracking-tight">Examination Lab Invigilation Gate</h2>
-                <span className="text-xs text-slate-400">Mandatory In-Person Attendance Verification</span>
-              </div>
-            </div>
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-400 text-slate-950">
-              Collegiate Policy
-            </span>
-          </div>
-
-          {/* Content Body */}
-          <div className="p-6 sm:p-8 space-y-6">
-            {/* Status Beacon Card */}
-            {isPending && (
-              <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 font-bold text-sm text-amber-800">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                    </span>
-                    <span>Awaiting Staff Verification in Lab</span>
-                  </div>
-                  <span className="text-[11px] font-mono font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                    Live Auto-Check Active
+                <div className="flex items-center space-x-2">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-400/20 text-teal-300 border border-teal-500/30">
+                    Institutional Code of Conduct
                   </span>
                 </div>
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  You are registered for this examination slot. Please report in person to your allocated lab room.
-                  Present your college ID to the staff/invigilator, who will mark you <strong>Present</strong> on the lab terminal.
-                </p>
-                <div className="text-[11px] text-amber-900 font-semibold bg-white/70 p-2.5 rounded-xl border border-amber-200">
-                  ✨ Once staff marks you Present, this screen will automatically unlock and load your test questions.
-                </div>
-              </div>
-            )}
-
-            {isAbsent && (
-              <div className="p-5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 space-y-3">
-                <div className="flex items-center space-x-2 font-bold text-sm text-rose-800">
-                  <XCircle className="w-5 h-5 text-rose-600" />
-                  <span>Marked Absent by Lab Staff</span>
-                </div>
-                <p className="text-xs text-rose-800 leading-relaxed">
-                  The invigilator marked you absent for this examination slot. You cannot take the test until staff verifies your presence.
-                </p>
-              </div>
-            )}
-
-            {/* Slot & Allocation Details */}
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5 text-xs">
-              <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
-                <span className="text-slate-500 font-medium">Assigned Lab Room:</span>
-                <span className="text-slate-900 font-extrabold text-sm flex items-center space-x-1">
-                  <Building className="w-4 h-4 text-teal-600" />
-                  <span>{assignedSlot?.labName || 'Designated College Lab'}</span>
-                </span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
-                <span className="text-slate-500 font-medium">Scheduled Window:</span>
-                <span className="text-slate-900 font-bold">
-                  {assignedSlot?.timeWindow || (assignedSlot?.startTime ? `${new Date(assignedSlot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(assignedSlot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Collegiate Window')}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 font-medium">Your Current Status:</span>
-                <span className={`font-extrabold capitalize ${isPending ? 'text-amber-700' : 'text-rose-700'}`}>
-                  {attendanceStatus}
-                </span>
+                <h2 className="text-lg font-extrabold text-white tracking-tight mt-0.5">
+                  Examination Rules & Disciplinary Undertaking
+                </h2>
               </div>
             </div>
+          </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
+          {/* Candidate & Exam Metadata Banner */}
+          <div className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Candidate</span>
+              <span className="text-slate-200 font-bold truncate block">
+                {user ? `${user.firstName} ${user.lastName}` : 'Candidate'}
+              </span>
+              <span className="text-teal-400 font-mono text-[11px] block truncate">
+                {user?.studentId || user?.email}
+              </span>
+            </div>
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Examination</span>
+              <span className="text-slate-200 font-bold truncate block">
+                {exam?.title || 'Course Examination'}
+              </span>
+              <span className="text-teal-400 text-[11px] block font-semibold">
+                Level {exam?.levelNumber || '1'} • 60 Minutes
+              </span>
+            </div>
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">Allocated Lab</span>
+              <span className="text-slate-200 font-bold truncate block flex items-center space-x-1">
+                <Building className="w-3.5 h-3.5 text-teal-400" />
+                <span>{assignedSlot?.labName || 'Designated College Lab'}</span>
+              </span>
+              <span className="text-emerald-400 text-[11px] font-semibold flex items-center space-x-1">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Verified Present</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Rules Checklist Content */}
+          <div className="p-6 sm:p-7 space-y-5 overflow-y-auto max-h-[55vh]">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Candidate Affirmations & Lab Rules
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  You must review and check all 5 disciplinary conditions before starting the test.
+                </p>
+              </div>
               <button
-                onClick={handleCheckAttendanceStatus}
-                disabled={isCheckingAttendance}
-                className="w-full py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-sm"
+                type="button"
+                onClick={handleToggleAllRules}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 transition"
               >
-                <RefreshCw className={`w-4 h-4 ${isCheckingAttendance ? 'animate-spin' : ''}`} />
-                <span>
-                  {isCheckingAttendance ? 'Verifying with Lab Server...' : 'Check Verification Status Now'}
-                </span>
+                {allChecked ? 'Deselect All' : 'Select All Rules'}
+              </button>
+            </div>
+
+            {startError && (
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                <span>{startError}</span>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {DISCIPLINARY_RULES.map((rule, idx) => {
+                const isChecked = !!rulesChecked[rule.id];
+                const IconComponent = rule.icon;
+
+                return (
+                  <div
+                    key={rule.id}
+                    onClick={() => handleToggleRule(rule.id)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3.5 select-none ${
+                      isChecked
+                        ? 'bg-teal-950/20 border-teal-500/50 shadow-sm'
+                        : 'bg-slate-950/40 border-slate-800 hover:border-slate-700 hover:bg-slate-950/60'
+                    }`}
+                  >
+                    <div className="pt-0.5 flex-shrink-0">
+                      <div
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition ${
+                          isChecked
+                            ? 'bg-teal-500 border-teal-500 text-slate-950'
+                            : 'border-slate-600 bg-slate-900 text-transparent'
+                        }`}
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+                    </div>
+
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <IconComponent className={`w-4 h-4 ${isChecked ? 'text-teal-400' : 'text-slate-400'}`} />
+                        <h4 className={`text-xs font-bold ${isChecked ? 'text-white' : 'text-slate-300'}`}>
+                          {idx + 1}. {rule.title}
+                        </h4>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {rule.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Card Footer Actions */}
+          <div className="p-6 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-2 text-xs">
+              <span className={`font-mono font-bold ${allChecked ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {checkedCount} / {DISCIPLINARY_RULES.length}
+              </span>
+              <span className="text-slate-400">Rules Acknowledged</span>
+            </div>
+
+            <div className="flex items-center space-x-3 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => navigate('/student/my-courses')}
+                className="w-1/2 sm:w-auto px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition border border-slate-700"
+              >
+                Back to Courses
               </button>
 
               <button
-                onClick={() => navigate('/student/my-courses')}
-                className="w-full py-2.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 transition flex items-center justify-center space-x-1.5"
+                type="button"
+                disabled={!allChecked || isStartingTest}
+                onClick={handleStartExam}
+                className={`w-1/2 sm:w-auto px-6 py-3 rounded-xl font-extrabold text-xs transition flex items-center justify-center space-x-2 shadow-lg ${
+                  allChecked && !isStartingTest
+                    ? 'bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 shadow-teal-500/20 cursor-pointer transform hover:scale-[1.02] active:scale-[0.98]'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60'
+                }`}
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Return to My Courses</span>
+                {isStartingTest ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Initiating Test Session...</span>
+                  </>
+                ) : allChecked ? (
+                  <>
+                    <span>Start Test & Proceed to Questions</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>Start Test</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Tab-switch Proctoring Violation Screen
+  if (isTabViolationTerminated) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 font-sans text-white">
+        <div className="max-w-md w-full bg-slate-900 border-2 border-rose-500 rounded-3xl p-8 text-center space-y-6 shadow-2xl relative overflow-hidden animate-fade-in">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="w-16 h-16 rounded-3xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto shadow-inner">
+            <XCircle className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-extrabold text-white">Exam Terminated: Tab Switch Violation</h2>
+            <p className="text-xs text-rose-300 font-semibold leading-relaxed">
+              You switched away from the examination tab. As per institutional examination regulations, tab switching is strictly prohibited.
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Your examination session has been immediately terminated, answers saved up to this point have been submitted for scoring, and you are being logged out of the test arena.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-950 border border-rose-900/50 text-xs space-y-1">
+            <span className="text-slate-400 font-semibold block">Logging out from examination in</span>
+            <span className="text-2xl font-mono font-black text-rose-400 block">{tabViolationSeconds} seconds</span>
+          </div>
+
+          <button
+            onClick={() => navigate('/student/total-courses')}
+            className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-rose-900/40"
+          >
+            <span>Exit Examination Now</span>
+          </button>
         </div>
       </div>
     );
@@ -501,7 +746,19 @@ export const ExamArena: React.FC = () => {
         </div>
 
         {/* Center/Right: Server Countdown Timer & Actions */}
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        <div className="flex items-center space-x-2.5 sm:space-x-4">
+          {/* Don't Switch Tab Proctoring Button */}
+          <button
+            onClick={() => setShowProctorModal(true)}
+            className="flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition shadow-sm animate-pulse"
+            title="Proctoring Active: Tab switching strictly forbidden. Click to view rules."
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Don't Switch Tab</span>
+            <span className="sm:hidden">No Tab Switch</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+          </button>
+
           {/* Autosave status indicator */}
           <span className="hidden sm:inline-flex items-center space-x-1 text-[11px] text-slate-400">
             <Save className="w-3.5 h-3.5 text-teal-400" />
@@ -530,6 +787,45 @@ export const ExamArena: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Proctoring Rules Modal */}
+      {showProctorModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 border border-amber-500/40 rounded-3xl p-6 sm:p-7 space-y-5 shadow-2xl relative">
+            <div className="flex items-center space-x-3 text-amber-400">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                <ShieldAlert className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-white">Tab-Switch Protection Active</h3>
+                <p className="text-xs text-amber-400/80 font-medium">Proctoring Anti-Cheating Protocol</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800 space-y-3 text-xs text-slate-300">
+              <div className="flex items-start space-x-2.5">
+                <span className="text-amber-400 font-bold">1.</span>
+                <p>Do NOT switch browser tabs, open other applications, or press Alt+Tab during this test.</p>
+              </div>
+              <div className="flex items-start space-x-2.5">
+                <span className="text-amber-400 font-bold">2.</span>
+                <p>Switching tabs will immediately terminate your exam session and log you out of the test.</p>
+              </div>
+              <div className="flex items-start space-x-2.5">
+                <span className="text-amber-400 font-bold">3.</span>
+                <p>Only code written before switching tabs will be graded. No additional re-entry is permitted.</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowProctorModal(false)}
+              className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl transition shadow-md"
+            >
+              I Understand — Return to Test
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Split-Pane Workspace */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
@@ -713,6 +1009,21 @@ export const ExamArena: React.FC = () => {
                   Test Cases & Verdict
                 </button>
                 <button
+                  onClick={() => setActiveConsoleTab('errors')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-t-md transition flex items-center space-x-1.5 ${
+                    activeConsoleTab === 'errors'
+                      ? 'bg-slate-900 text-rose-400 border-t-2 border-rose-400'
+                      : errorLog
+                      ? 'text-rose-400 hover:text-rose-300'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>Compiler & Error Logs</span>
+                  {errorLog && (
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  )}
+                </button>
+                <button
                   onClick={() => setActiveConsoleTab('input')}
                   className={`px-2.5 py-1 text-xs font-semibold rounded-t-md transition ${
                     activeConsoleTab === 'input'
@@ -756,18 +1067,33 @@ export const ExamArena: React.FC = () => {
 
             {/* Console Content Area */}
             <div className="flex-1 p-3 overflow-y-auto font-mono text-xs">
-              {compileError && (
-                <div className="p-3 mb-2 rounded bg-rose-950/40 border border-rose-500/30 text-rose-300 whitespace-pre-wrap">
-                  <span className="font-bold block mb-1">Compilation Error:</span>
-                  {compileError}
-                </div>
-              )}
-
               {activeConsoleTab === 'tests' && (
                 <div className="space-y-2">
+                  {errorLog && (
+                    <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                        <span>
+                          {latestVerdict === 'Compilation Error' ? 'Compilation failed.' : 'Runtime or syntax error occurred.'}{' '}
+                          Check the <strong>Compiler & Error Logs</strong> tab for exact line diagnostics.
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setActiveConsoleTab('errors')}
+                        className="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[11px] font-semibold border border-rose-500/40"
+                      >
+                        View Error Logs
+                      </button>
+                    </div>
+                  )}
+
                   {testResults.length === 0 ? (
                     <div className="text-slate-500 text-xs py-4 text-center">
-                      Click <strong>Run Public Tests</strong> to test against example inputs, or <strong>Submit Answer</strong> to evaluate against full benchmark test cases.
+                      {errorLog ? (
+                        <span>Code could not execute against tests due to compiler or syntax error. Open the <strong>Compiler & Error Logs</strong> tab.</span>
+                      ) : (
+                        <span>Click <strong>Run Public Tests</strong> to test against example inputs, or <strong>Submit Answer</strong> to evaluate against full benchmark test cases.</span>
+                      )}
                     </div>
                   ) : (
                     testResults.map((tc, idx) => (
@@ -820,23 +1146,105 @@ export const ExamArena: React.FC = () => {
                 </div>
               )}
 
+              {activeConsoleTab === 'errors' && (
+                <div className="space-y-3 font-mono">
+                  {errorLog ? (
+                    <>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                            {latestVerdict || 'Error Diagnostic'}
+                          </span>
+                          <span className="text-slate-400 text-xs">
+                            Language: <span className="text-teal-300 font-semibold">{selectedLanguage.toUpperCase()}</span>
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(errorLog);
+                            alert('Compiler logs copied to clipboard.');
+                          }}
+                          className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] transition"
+                        >
+                          Copy Logs
+                        </button>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-slate-950 border border-rose-950/70 shadow-inner overflow-x-auto">
+                        <pre className="text-rose-300 whitespace-pre-wrap text-xs leading-relaxed font-mono">
+                          {errorLog}
+                        </pre>
+                      </div>
+
+                      {/* Quick Troubleshooting Guide tailored by language */}
+                      <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80 text-[11px] text-slate-400 space-y-1.5 font-sans">
+                        <div className="text-slate-300 font-semibold flex items-center space-x-1.5">
+                          <span>💡 Language Diagnostic Tips:</span>
+                        </div>
+                        <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                          {selectedLanguage === 'c' && (
+                            <>
+                              <li>Ensure all statements terminate with a semicolon (<code>;</code>).</li>
+                              <li>Check standard headers like <code>#include &lt;stdio.h&gt;</code> and <code>#include &lt;stdlib.h&gt;</code>.</li>
+                              <li>In <code>scanf</code>, remember the address-of operator <code>&amp;</code> (e.g. <code>scanf(&quot;%d&quot;, &amp;val)</code>).</li>
+                            </>
+                          )}
+                          {selectedLanguage === 'cpp' && (
+                            <>
+                              <li>Ensure <code>#include &lt;iostream&gt;</code> and <code>using namespace std;</code> are included.</li>
+                              <li>Check matching curly brackets <code>&#123; &#125;</code> and parentheses.</li>
+                            </>
+                          )}
+                          {selectedLanguage === 'java' && (
+                            <>
+                              <li>Java code must define <code>public class Main</code> with <code>public static void main(String[] args)</code>.</li>
+                              <li>Remember to import <code>java.util.Scanner;</code> if reading from standard input.</li>
+                            </>
+                          )}
+                          {selectedLanguage === 'python' && (
+                            <>
+                              <li>Check indentation levels (spaces vs tabs).</li>
+                              <li>Cast input strings to numbers if calculating (e.g. <code>int(input())</code>).</li>
+                            </>
+                          )}
+                          {selectedLanguage === 'javascript' && (
+                            <>
+                              <li>Read stdin synchronously using <code>require(&#39;fs&#39;).readFileSync(0, &#39;utf-8&#39;)</code>.</li>
+                              <li>Ensure functions and variables are defined before invocation.</li>
+                            </>
+                          )}
+                        </ul>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-slate-500 text-xs py-8 text-center flex flex-col items-center justify-center space-y-2 font-sans">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500/60" />
+                      <span className="text-slate-300 font-semibold">No Compilation or Runtime Errors</span>
+                      <span className="text-[11px] text-slate-500">Your program compiled and ran without compiler errors.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeConsoleTab === 'input' && (
-                <div className="h-full flex flex-col">
-                  <span className="text-slate-500 text-[11px] mb-1 font-sans">
-                    Custom input passed to stdin when running code:
+                <div className="h-full flex flex-col font-sans">
+                  <span className="text-slate-400 text-[11px] mb-1.5">
+                    Custom input passed to stdin when clicking <strong>Run Public Tests</strong>:
                   </span>
                   <textarea
                     value={customInput}
                     onChange={(e) => setCustomInput(e.target.value)}
-                    placeholder="Enter standard input values..."
-                    className="flex-1 w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono"
+                    placeholder="Enter standard input values (e.g. 5 10)..."
+                    className="flex-1 w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono"
+                    rows={5}
                   />
                 </div>
               )}
 
               {activeConsoleTab === 'output' && (
                 <div>
-                  <pre className="text-slate-300 whitespace-pre-wrap">
+                  <pre className="text-slate-300 whitespace-pre-wrap leading-relaxed">
                     {consoleOutput || 'Standard output stream is empty.'}
                   </pre>
                 </div>

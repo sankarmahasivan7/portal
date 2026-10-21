@@ -15,7 +15,8 @@ import {
   Layers,
   Check,
   AlertCircle,
-  PlayCircle
+  PlayCircle,
+  XCircle
 } from 'lucide-react';
 
 interface LevelItem {
@@ -32,6 +33,8 @@ interface LevelItem {
   isEligible: boolean;
   lockReason?: string;
   isRegisteredForExam: boolean;
+  attendanceStatus?: string;
+  isAbsent?: boolean;
 }
 
 interface CourseOverviewData {
@@ -252,10 +255,17 @@ export const CourseOverview: React.FC = () => {
                         )}
 
                         {lvl.isEnrolled && !lvl.isPassed && (
-                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
-                            <Check className="w-3.5 h-3.5 text-teal-600" />
-                            <span>Enrolled in My Courses</span>
-                          </span>
+                          lvl.isAbsent ? (
+                            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Marked Absent (In My Courses)</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                              <Check className="w-3.5 h-3.5 text-teal-600" />
+                              <span>Enrolled in My Courses</span>
+                            </span>
+                          )
                         )}
 
                         {!lvl.isEnrolled && lvl.isEligible && (
@@ -318,10 +328,26 @@ export const CourseOverview: React.FC = () => {
                             <span>Level Completed</span>
                           </span>
                         ) : lvl.isEnrolled ? (
-                          <span className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-teal-50 border border-teal-200 rounded-xl text-teal-800 text-xs font-bold shadow-xs">
-                            <CheckCircle2 className="w-4 h-4 text-teal-600" />
-                            <span>Registered for Level {lvl.levelNumber}</span>
-                          </span>
+                          lvl.isAbsent ? (
+                            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                              <span className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-bold shadow-xs">
+                                <AlertCircle className="w-4 h-4 text-rose-600" />
+                                <span>Faculty Reset Required</span>
+                              </span>
+                              <button
+                                onClick={() => navigate(`/student/course/${languageSlug}/level/${lvl.levelNumber}`)}
+                                className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                              >
+                                <span>View Level Page</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-teal-50 border border-teal-200 rounded-xl text-teal-800 text-xs font-bold shadow-xs">
+                              <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                              <span>Registered for Level {lvl.levelNumber}</span>
+                            </span>
+                          )
                         ) : lvl.isEligible ? (
                           <button
                             onClick={() => handleRegisterLevel(lvl.levelNumber)}

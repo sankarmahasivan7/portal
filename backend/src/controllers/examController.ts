@@ -15,6 +15,7 @@ import { ProgressionService } from '../services/ProgressionService';
 import { executeCodeInWorker, WorkerTestCaseInput } from '../services/ExecutionClient';
 import { logAudit } from '../services/AuditService';
 import { getClientIp } from '../middleware/ipCheck';
+import { isSlotStartedOrPassed } from '../services/SlotTimingService';
 
 export async function getAvailableExams(req: AuthRequest, res: Response) {
   try {
@@ -54,14 +55,39 @@ export async function getAvailableExams(req: AuthRequest, res: Response) {
         // Fetch slots in real-time
         // RULE: Slots only show starting from previous day 9:00 PM
         // RULE: If slots are filled (registeredCount >= capacity), do NOT show the slot
+        // RULE: If slot start time has arrived/passed (e.g. 09:15), do NOT show the slot
         let availableSlots: any[] = [];
         if (isRegistrationOpen || req.user?.role === 'admin' || req.user?.role === 'faculty') {
-          availableSlots = await ExaminationSlot.find({
+          const candidateSlots = await ExaminationSlot.find({
             examinationId: exam._id,
-            isActive: true,
-            // For students, strictly show only unfilled slots in real-time
-            ...(req.user?.role === 'student' ? { $expr: { $lt: ['$registeredCount', '$capacity'] } } : {})
+            isActive: true
           }).sort({ startTime: 1, labName: 1 });
+
+          const slotIds = candidateSlots.map((s) => s._id);
+          const activeRegs = await ExaminationRegistration.find({
+            slotId: { $in: slotIds },
+            status: { $in: ['registered', 'attended'] }
+          }).select('slotId');
+
+          const countsMap = new Map<string, number>();
+          activeRegs.forEach((r) => {
+            if (r.slotId) {
+              const sid = r.slotId.toString();
+              countsMap.set(sid, (countsMap.get(sid) || 0) + 1);
+            }
+          });
+
+          const syncedSlots = candidateSlots.map((s) => {
+            const realCount = countsMap.get(s._id.toString()) || 0;
+            s.registeredCount = Math.max(s.registeredCount || 0, realCount);
+            return s;
+          });
+
+          if (req.user?.role === 'student') {
+            availableSlots = syncedSlots.filter((s) => s.registeredCount < s.capacity && !isSlotStartedOrPassed(s, now));
+          } else {
+            availableSlots = syncedSlots;
+          }
         }
 
         return {
@@ -109,14 +135,39 @@ export async function getExamById(req: AuthRequest, res: Response) {
     const now = new Date();
     const isRegistrationOpen = now >= new Date(exam.registrationStartDate) && now <= new Date(exam.registrationEndDate);
 
-    // Filter filled slots in real time for students
+    // Filter filled slots and started/passed slots in real time for students
     let slots: any[] = [];
     if (isRegistrationOpen || req.user?.role !== 'student') {
-      slots = await ExaminationSlot.find({
+      const candidateSlots = await ExaminationSlot.find({
         examinationId: exam._id,
-        isActive: true,
-        ...(req.user?.role === 'student' ? { $expr: { $lt: ['$registeredCount', '$capacity'] } } : {})
+        isActive: true
       }).sort({ startTime: 1, labName: 1 });
+
+      const slotIds = candidateSlots.map((s) => s._id);
+      const activeRegs = await ExaminationRegistration.find({
+        slotId: { $in: slotIds },
+        status: { $in: ['registered', 'attended'] }
+      }).select('slotId');
+
+      const countsMap = new Map<string, number>();
+      activeRegs.forEach((r) => {
+        if (r.slotId) {
+          const sid = r.slotId.toString();
+          countsMap.set(sid, (countsMap.get(sid) || 0) + 1);
+        }
+      });
+
+      const syncedSlots = candidateSlots.map((s) => {
+        const realCount = countsMap.get(s._id.toString()) || 0;
+        s.registeredCount = Math.max(s.registeredCount || 0, realCount);
+        return s;
+      });
+
+      if (req.user?.role === 'student') {
+        slots = syncedSlots.filter((s) => s.registeredCount < s.capacity && !isSlotStartedOrPassed(s, now));
+      } else {
+        slots = syncedSlots;
+      }
     }
 
     let registration = null;
@@ -212,52 +263,85 @@ export async function registerForExamSlot(req: AuthRequest, res: Response) {
       }
     }
 
-    // Atomic slot capacity check and increment (real-time capacity verification)
+    // Atomic slot capacity check across all courses
+    const slot = await ExaminationSlot.findById(slotId);
+    if (!slot || !slot.isActive) {
+      return res.status(404).json({ success: false, message: 'Selected examination slot was not found or is inactive.' });
+    }
+
+    // Verify slot has not already started or passed
+    if (isSlotStartedOrPassed(slot, now)) {
+      return res.status(400).json({
+        success: false,
+        message: 'This examination slot has already started or concluded. You cannot register for a slot that has already commenced.'
+      });
+    }
+
+    // Strict atomic capacity enforcement across all courses (handles 40+ simultaneous applicants without crashing or overbooking)
+    const maxCapacity = slot.capacity || 30;
+
+    // Fast atomic conditional increment: only succeeds if registeredCount is strictly below maxCapacity (30)
     const updatedSlot = await ExaminationSlot.findOneAndUpdate(
       {
-        _id: slotId,
-        examinationId: exam._id,
-        $expr: { $lt: ['$registeredCount', '$capacity'] }
+        _id: slot._id,
+        isActive: true,
+        registeredCount: { $lt: maxCapacity }
       },
-      { $inc: { registeredCount: 1 } },
-      { new: true }
+      {
+        $inc: { registeredCount: 1 },
+        $addToSet: { examinationId: exam._id }
+      },
+      {
+        new: true
+      }
     );
 
     if (!updatedSlot) {
       return res.status(400).json({
         success: false,
-        message: 'Selected lab slot is completely filled (30/30 capacity reached). In real time, filled slots are no longer available. Please select another slot.'
+        message: `Selected lab slot (${slot.labName} - ${slot.timeWindow}) is completely filled (${maxCapacity}/${maxCapacity} seats filled). In real time, full slots cannot accept new registrations. Please choose another lab room or slot.`
       });
     }
 
-    const registration = await ExaminationRegistration.create({
-      examinationId: exam._id,
-      slotId: updatedSlot._id,
-      studentId,
-      status: 'registered',
-      registeredAt: now
-    });
+    try {
+      const registration = await ExaminationRegistration.create({
+        examinationId: exam._id,
+        slotId: updatedSlot._id,
+        studentId,
+        status: 'registered',
+        registeredAt: now
+      });
 
-    // Create notification
-    await Notification.create({
-      userId: studentId,
-      title: `Registered for ${exam.title}`,
-      message: `Your slot (${updatedSlot.slotName}) has been confirmed. Exam date: ${exam.examDate.toLocaleDateString()}.`,
-      type: 'registration',
-      metadata: { examinationId: exam._id, slotId: updatedSlot._id }
-    });
+      // Non-blocking async notification and audit logging for peak throughput
+      Notification.create({
+        userId: studentId,
+        title: `Registered for ${exam.title}`,
+        message: `Your slot (${updatedSlot.slotName || updatedSlot.timeWindow}) in ${updatedSlot.labName} has been confirmed. Exam date: ${exam.examDate.toLocaleDateString()}.`,
+        type: 'registration',
+        metadata: { examinationId: exam._id, slotId: updatedSlot._id }
+      }).catch(() => {});
 
-    await logAudit(
-      'EXAM_SLOT_REGISTERED',
-      { examinationId: exam._id, slotId: updatedSlot._id, studentId },
-      req
-    );
+      logAudit(
+        'EXAM_SLOT_REGISTERED',
+        { examinationId: exam._id, slotId: updatedSlot._id, studentId },
+        req
+      ).catch(() => {});
 
-    return res.status(201).json({
-      success: true,
-      message: 'Examination slot successfully confirmed.',
-      registration
-    });
+      return res.status(201).json({
+        success: true,
+        message: 'Examination slot successfully confirmed.',
+        registration
+      });
+    } catch (createErr: any) {
+      // Revert atomic counter if creation failed
+      await ExaminationSlot.findByIdAndUpdate(updatedSlot._id, {
+        $inc: { registeredCount: -1 }
+      });
+      if (createErr.code === 11000) {
+        return res.status(400).json({ success: false, message: 'You are already registered for this examination.' });
+      }
+      return res.status(500).json({ success: false, message: 'Registration failed', error: createErr.message });
+    }
   } catch (error: any) {
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'You are already registered for this examination.' });
@@ -420,6 +504,38 @@ export async function startExaminationSession(req: AuthRequest, res: Response) {
     const finalDeadlineTime = Math.min(maxCalculatedDeadline, slotEndTime + 5 * 60 * 1000);
     const deadline = new Date(finalDeadlineTime);
 
+    // Multi-Question Pool & Per-Student Shuffling:
+    // Pull questions matching this exam, course/language, and target level.
+    // Shuffle the candidate pool so each student receives an independently randomized set of 2 questions.
+    const langId = exam.languageId?._id || exam.languageId;
+    const engineSlug = (exam.languageId as any)?.slug || (exam.languageId as any)?.executionEngineId;
+
+    const candidateQuestions = await Question.find({
+      $or: [
+        { _id: { $in: exam.questions || [] } },
+        { languageId: langId, targetLevel: exam.levelNumber, isArchived: false, isDraft: false },
+        ...(engineSlug
+          ? [{ allowedLanguages: engineSlug, targetLevel: exam.levelNumber, isArchived: false, isDraft: false }]
+          : [])
+      ],
+      isArchived: false,
+      isDraft: false
+    }).select('_id').lean();
+
+    const uniqueQuestionIds = Array.from(new Set(candidateQuestions.map((q: any) => q._id.toString())));
+
+    // Fisher-Yates Shuffle
+    for (let i = uniqueQuestionIds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueQuestionIds[i], uniqueQuestionIds[j]] = [uniqueQuestionIds[j], uniqueQuestionIds[i]];
+    }
+
+    const assignedQuestionIds = (
+      uniqueQuestionIds.length > 0
+        ? uniqueQuestionIds.slice(0, 2)
+        : (exam.questions || []).slice(0, 2)
+    ).map((id: string | any) => new mongoose.Types.ObjectId(id));
+
     session = await ExaminationSession.create({
       examinationId: exam._id,
       slotId: slot._id,
@@ -428,6 +544,7 @@ export async function startExaminationSession(req: AuthRequest, res: Response) {
       deadline,
       status: 'active',
       drafts: {},
+      assignedQuestions: assignedQuestionIds,
       ipAddress: getClientIp(req),
       userAgent: req.headers['user-agent']
     });
@@ -483,13 +600,25 @@ export async function getSessionData(req: AuthRequest, res: Response) {
     }
 
     // Load permitted questions with public test cases only
-    const questions = await Question.find({ _id: { $in: exam.questions } });
+    // Use session-specific assigned shuffled questions if available, falling back to exam.questions
+    const targetQuestionIds =
+      session.assignedQuestions && session.assignedQuestions.length > 0
+        ? session.assignedQuestions
+        : exam.questions;
+
+    const questions = await Question.find({ _id: { $in: targetQuestionIds } }).lean();
+    const questionMap = new Map<string, any>(questions.map((q: any) => [q._id.toString(), q]));
+    const orderedQuestions = targetQuestionIds
+      .map((id: any) => questionMap.get(id.toString()))
+      .filter(Boolean);
+
     const sanitizedQuestions = await Promise.all(
-      questions.map(async (q) => {
+      orderedQuestions.map(async (q: any) => {
         // Fetch only public test cases (Hidden test cases are NEVER returned to student)
         const publicTestCases = await TestCase.find({ questionId: q._id, isHidden: false })
           .select('input expectedOutput isHidden weight order')
-          .sort({ order: 1 });
+          .sort({ order: 1 })
+          .lean();
 
         return {
           id: q._id,
@@ -501,7 +630,7 @@ export async function getSessionData(req: AuthRequest, res: Response) {
           examples: q.examples,
           difficulty: q.difficulty,
           marks: q.marks,
-          allowedLanguages: q.allowedLanguages.length > 0 ? q.allowedLanguages : exam.allowedLanguages,
+          allowedLanguages: q.allowedLanguages && q.allowedLanguages.length > 0 ? q.allowedLanguages : exam.allowedLanguages,
           publicTestCases
         };
       })
@@ -617,9 +746,16 @@ export async function runPublicCode(req: AuthRequest, res: Response) {
       memoryLimitMb: question.memoryLimitMb || 256
     });
 
+    const primaryErrorLog = executionResult.errorLog || executionResult.compileOutput || (
+      executionResult.testCaseResults.find((r) => !r.passed && r.errorMessage)?.errorMessage
+    ) || executionResult.error;
+
     return res.json({
       success: true,
-      result: executionResult
+      result: {
+        ...executionResult,
+        errorLog: primaryErrorLog
+      }
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Code execution failure', error: error.message });
@@ -701,12 +837,12 @@ export async function submitQuestionAnswer(req: AuthRequest, res: Response) {
           ? new mongoose.Types.ObjectId(originalCase.id)
           : new mongoose.Types.ObjectId()) as any,
         passed: tcr.passed,
-        actualOutput: isHidden ? undefined : tcr.actualOutput,
-        expectedOutput: isHidden ? undefined : tcr.expectedOutput,
+        actualOutput: isHidden ? undefined : (tcr.actualOutput ? tcr.actualOutput.slice(0, 1024) : undefined),
+        expectedOutput: isHidden ? undefined : (tcr.expectedOutput ? tcr.expectedOutput.slice(0, 1024) : undefined),
         isHidden,
         executionTimeMs: tcr.executionTimeMs,
         status: tcr.status as any,
-        errorMessage: isHidden ? undefined : tcr.errorMessage
+        errorMessage: isHidden ? undefined : (tcr.errorMessage ? tcr.errorMessage.slice(0, 1024) : undefined)
       };
     });
 
@@ -718,12 +854,12 @@ export async function submitQuestionAnswer(req: AuthRequest, res: Response) {
       studentId,
       questionId: question._id,
       language,
-      code,
+      code: code ? code.slice(0, 50000) : '',
       verdict: workerResult.verdict,
       score,
       maxScore: question.marks,
       testCaseResults: submissionTcResults,
-      compileOutput: workerResult.compileOutput,
+      compileOutput: workerResult.compileOutput ? workerResult.compileOutput.slice(0, 4096) : undefined,
       totalExecutionTimeMs: workerResult.totalExecutionTimeMs,
       submittedAt: new Date()
     });
@@ -756,6 +892,14 @@ export async function submitQuestionAnswer(req: AuthRequest, res: Response) {
       errorMessage: r.isHidden ? undefined : r.errorMessage
     }));
 
+    const primaryErrorLog = workerResult.errorLog || workerResult.compileOutput || (
+      submissionTcResults.find((r) => !r.passed && !r.isHidden && r.errorMessage)?.errorMessage
+    ) || (
+      submissionTcResults.find((r) => !r.passed && r.errorMessage)
+        ? 'Runtime error encountered during test evaluation.'
+        : undefined
+    ) || workerResult.error;
+
     return res.json({
       success: true,
       submissionId: submission._id,
@@ -765,6 +909,7 @@ export async function submitQuestionAnswer(req: AuthRequest, res: Response) {
       totalTests: workerResult.totalTests,
       passedTests: workerResult.passedTests,
       compileOutput: workerResult.compileOutput,
+      errorLog: primaryErrorLog,
       testCaseResults: sanitizedResults
     });
   } catch (error: any) {
@@ -944,11 +1089,19 @@ export async function getExamAttendanceStatus(req: AuthRequest, res: Response) {
 
     const slot: any = registration.slotId;
 
+    const existingSession = await ExaminationSession.findOne({
+      examinationId,
+      studentId,
+      status: 'active'
+    });
+
     return res.json({
       success: true,
       hasRegistration: true,
       attendanceStatus: registration.attendanceStatus,
       markedPresentAt: registration.markedPresentAt,
+      hasActiveSession: !!existingSession,
+      activeSessionId: existingSession?._id,
       slot: slot
         ? {
             id: slot._id,
@@ -964,3 +1117,47 @@ export async function getExamAttendanceStatus(req: AuthRequest, res: Response) {
     return res.status(500).json({ success: false, message: 'Failed to fetch attendance status', error: error.message });
   }
 }
+
+/**
+ * Proctoring Anti-Cheating Gate:
+ * Immediately terminates an examination session when tab switching / window blur violation is detected.
+ */
+export async function terminateSessionOnTabSwitch(req: AuthRequest, res: Response) {
+  try {
+    const { sessionId } = req.params;
+    const studentId = req.userId!;
+
+    const session = await ExaminationSession.findById(sessionId);
+    if (!session || (session.studentId.toString() !== studentId && req.user?.role !== 'admin')) {
+      return res.status(403).json({ success: false, message: 'Unauthorized examination session.' });
+    }
+
+    if (session.status === 'active') {
+      session.status = 'terminated';
+      session.finishedAt = new Date();
+      await session.save();
+
+      await logAudit(
+        'EXAM_SESSION_TERMINATED_TAB_SWITCH',
+        {
+          sessionId: session._id,
+          studentId,
+          examinationId: session.examinationId,
+          reason: 'Proctoring violation: Student switched browser tab / window focus lost'
+        },
+        req
+      );
+
+      // Finalize session so score is computed from submitted problems up to this point
+      await ProgressionService.finalizeExamSession(session._id.toString(), req);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Examination session terminated due to tab switch violation.'
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Termination error', error: error.message });
+  }
+}
+

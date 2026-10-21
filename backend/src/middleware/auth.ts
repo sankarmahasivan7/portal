@@ -8,12 +8,18 @@ export interface AuthRequest extends Request {
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+  let token = '';
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.query && (req.query.token || req.query.bearerToken)) {
+    token = (req.query.token || req.query.bearerToken) as string;
+  }
+
+  if (!token) {
     return res.status(401).json({ success: false, message: 'Authentication required. Missing Bearer token.' });
   }
 
-  const token = authHeader.split(' ')[1];
   const secret = process.env.JWT_SECRET || 'college_ps_portal_super_secure_jwt_secret_change_in_prod';
 
   try {

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import dns from 'dns';
 import { User } from '../models/User';
 import { StudentProfile } from '../models/StudentProfile';
 import { ProgrammingLanguage } from '../models/ProgrammingLanguage';
@@ -11,13 +12,26 @@ import { Examination } from '../models/Examination';
 import { ExaminationSlot } from '../models/ExaminationSlot';
 import { PlatformConfiguration } from '../models/PlatformConfiguration';
 import { StudentProgress } from '../models/StudentProgress';
+import { ExaminationSession } from '../models/ExaminationSession';
+import { ExaminationResult } from '../models/ExaminationResult';
+import { seedAllCourseQuestions } from '../data/questions';
 
 dotenv.config();
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/college_assessment_db';
 
 export async function runSeed() {
-  console.log('[Seeder] Connecting to MongoDB at', MONGODB_URI);
+  const maskedUri = MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
+  console.log('[Seeder] Connecting to MongoDB at', maskedUri);
+
+  if (MONGODB_URI.startsWith('mongodb+srv://')) {
+    try {
+      dns.setServers(['8.8.8.8', '1.1.1.1']);
+    } catch (e: any) {
+      console.warn('DNS setServers error:', e.message);
+    }
+  }
+
   await mongoose.connect(MONGODB_URI);
 
   // Clear existing collections
@@ -31,7 +45,9 @@ export async function runSeed() {
     Examination.deleteMany({}),
     ExaminationSlot.deleteMany({}),
     PlatformConfiguration.deleteMany({}),
-    StudentProgress.deleteMany({})
+    StudentProgress.deleteMany({}),
+    ExaminationSession.deleteMany({}),
+    ExaminationResult.deleteMany({})
   ]);
 
   console.log('[Seeder] Cleared previous data.');
@@ -78,6 +94,9 @@ export async function runSeed() {
     firstName: 'Aarav',
     lastName: 'Sharma',
     studentId: 'CS2026-001',
+    department: 'Computer Science and Engineering',
+    year: 3,
+    section: 'A',
     isActive: true
   });
 
@@ -85,9 +104,33 @@ export async function runSeed() {
     userId: student1._id,
     studentId: 'CS2026-001',
     department: 'Computer Science and Engineering',
-    batch: '2022-2026',
-    semester: 6,
+    batch: '2023-2027',
+    semester: 5,
+    year: 3,
     enrollmentNumber: 'ENR2026001'
+  });
+
+  const sangarasUser = await User.create({
+    email: 'sangaras.ug.24.it@francisxavier.ac.in',
+    passwordHash: studentPass,
+    role: 'student',
+    firstName: 'Sangaras',
+    lastName: 'FX',
+    studentId: 'FX24IT-001',
+    department: 'Information Technology',
+    year: 3,
+    section: 'A',
+    isActive: true
+  });
+
+  await StudentProfile.create({
+    userId: sangarasUser._id,
+    studentId: 'FX24IT-001',
+    department: 'Information Technology',
+    batch: '2024-2028',
+    semester: 5,
+    year: 3,
+    enrollmentNumber: 'ENR24IT001'
   });
 
   const student2 = await User.create({
@@ -96,24 +139,100 @@ export async function runSeed() {
     role: 'student',
     firstName: 'Priya',
     lastName: 'Patel',
-    studentId: 'CS2026-002',
+    studentId: 'IT2025-014',
+    department: 'Information Technology',
+    year: 2,
+    section: 'B',
     isActive: true
   });
 
   await StudentProfile.create({
     userId: student2._id,
-    studentId: 'CS2026-002',
+    studentId: 'IT2025-014',
     department: 'Information Technology',
-    batch: '2022-2026',
-    semester: 6,
+    batch: '2024-2028',
+    semester: 3,
+    year: 2,
     enrollmentNumber: 'ENR2026002'
+  });
+
+  const student3 = await User.create({
+    email: 'student3@college.edu',
+    passwordHash: studentPass,
+    role: 'student',
+    firstName: 'Rohan',
+    lastName: 'Verma',
+    studentId: 'EC2026-088',
+    department: 'Electronics and Communication Engineering',
+    year: 1,
+    section: 'A',
+    isActive: true
+  });
+
+  await StudentProfile.create({
+    userId: student3._id,
+    studentId: 'EC2026-088',
+    department: 'Electronics and Communication Engineering',
+    batch: '2025-2029',
+    semester: 1,
+    year: 1,
+    enrollmentNumber: 'ENR2026003'
+  });
+
+  const student4 = await User.create({
+    email: 'student4@college.edu',
+    passwordHash: studentPass,
+    role: 'student',
+    firstName: 'Ananya',
+    lastName: 'Iyer',
+    studentId: 'CS2023-009',
+    department: 'Computer Science and Engineering',
+    year: 4,
+    section: 'C',
+    isActive: true
+  });
+
+  await StudentProfile.create({
+    userId: student4._id,
+    studentId: 'CS2023-009',
+    department: 'Computer Science and Engineering',
+    batch: '2022-2026',
+    semester: 7,
+    year: 4,
+    enrollmentNumber: 'ENR2026004'
+  });
+
+  const student5 = await User.create({
+    email: 'student5@college.edu',
+    passwordHash: studentPass,
+    role: 'student',
+    firstName: 'Kavya',
+    lastName: 'Reddy',
+    studentId: 'EE2025-045',
+    department: 'Electrical and Electronics Engineering',
+    year: 2,
+    section: 'A',
+    isActive: true
+  });
+
+  await StudentProfile.create({
+    userId: student5._id,
+    studentId: 'EE2025-045',
+    department: 'Electrical and Electronics Engineering',
+    batch: '2024-2028',
+    semester: 3,
+    year: 2,
+    enrollmentNumber: 'ENR2026005'
   });
 
   console.log('[Seeder] Users seeded:');
   console.log(' - Admin: admin@college.edu / Admin@123');
   console.log(' - Faculty: faculty@college.edu / Faculty@123');
-  console.log(' - Student 1: student1@college.edu / Student@123');
-  console.log(' - Student 2: student2@college.edu / Student@123');
+  console.log(' - Student 1 (Year 3 CSE): student1@college.edu / Student@123');
+  console.log(' - Student 2 (Year 2 IT): student2@college.edu / Student@123');
+  console.log(' - Student 3 (Year 1 ECE): student3@college.edu / Student@123');
+  console.log(' - Student 4 (Year 4 CSE): student4@college.edu / Student@123');
+  console.log(' - Student 5 (Year 2 EEE): student5@college.edu / Student@123');
 
   // 3. Create Programming Languages
   const langConfigs = [
@@ -211,134 +330,10 @@ export async function runSeed() {
   const javaLang = languagesMap.get('java');
   const cppLang = languagesMap.get('cpp');
 
-  // Question 1: Sum of Two Numbers (Level 1)
-  const q1 = await Question.create({
-    title: 'Sum of Two Numbers',
-    slug: 'sum-of-two-numbers',
-    description: 'Write a program that takes two integers from standard input and prints their sum to standard output.',
-    inputFormat: 'Two space-separated integers A and B.',
-    outputFormat: 'Print a single integer: the sum of A and B.',
-    constraints: '-10^6 <= A, B <= 10^6',
-    examples: [
-      { input: '3 5', output: '8', explanation: '3 + 5 = 8' }
-    ],
-    allowedLanguages: ['c', 'cpp', 'java', 'python', 'javascript'],
-    targetLevel: 1,
-    difficulty: 'Easy',
-    marks: 100,
-    createdBy: facultyUser._id
-  });
-
-  await TestCase.create([
-    {
-      questionId: q1._id,
-      input: '4 7',
-      expectedOutput: '11',
-      isHidden: false,
-      weight: 1,
-      order: 1
-    },
-    {
-      questionId: q1._id,
-      input: '100 250',
-      expectedOutput: '350',
-      isHidden: true,
-      weight: 1,
-      order: 2
-    },
-    {
-      questionId: q1._id,
-      input: '-50 20',
-      expectedOutput: '-30',
-      isHidden: true,
-      weight: 1,
-      order: 3
-    }
-  ]);
-
-  // Question 2: Maximum of Three Numbers (Level 1)
-  const q2 = await Question.create({
-    title: 'Maximum of Three Numbers',
-    slug: 'maximum-of-three-numbers',
-    description: 'Given three integers, find and output the maximum among them.',
-    inputFormat: 'Three space-separated integers X, Y, and Z.',
-    outputFormat: 'Print the maximum value.',
-    constraints: '-10^5 <= X, Y, Z <= 10^5',
-    examples: [
-      { input: '12 45 32', output: '45', explanation: '45 is the largest value.' }
-    ],
-    allowedLanguages: ['c', 'cpp', 'java', 'python'],
-    targetLevel: 1,
-    difficulty: 'Easy',
-    marks: 100,
-    createdBy: facultyUser._id
-  });
-
-  await TestCase.create([
-    {
-      questionId: q2._id,
-      input: '10 25 15',
-      expectedOutput: '25',
-      isHidden: false,
-      weight: 1,
-      order: 1
-    },
-    {
-      questionId: q2._id,
-      input: '99 105 4',
-      expectedOutput: '105',
-      isHidden: true,
-      weight: 1,
-      order: 2
-    },
-    {
-      questionId: q2._id,
-      input: '-10 -5 -20',
-      expectedOutput: '-5',
-      isHidden: true,
-      weight: 1,
-      order: 3
-    }
-  ]);
-
-  // Question 3: Array Reverse (Level 2)
-  const q3 = await Question.create({
-    title: 'Reverse an Array',
-    slug: 'reverse-an-array',
-    description: 'Given an array of N integers, print the elements in reverse order separated by spaces.',
-    inputFormat: 'First line contains integer N. Second line contains N space-separated integers.',
-    outputFormat: 'Print the N integers in reverse order separated by space.',
-    constraints: '1 <= N <= 1000',
-    examples: [
-      { input: '5\n1 2 3 4 5', output: '5 4 3 2 1', explanation: 'Elements reversed.' }
-    ],
-    allowedLanguages: ['c', 'cpp', 'java', 'python'],
-    targetLevel: 2,
-    difficulty: 'Medium',
-    marks: 100,
-    createdBy: facultyUser._id
-  });
-
-  await TestCase.create([
-    {
-      questionId: q3._id,
-      input: '4\n10 20 30 40',
-      expectedOutput: '40 30 20 10',
-      isHidden: false,
-      weight: 1,
-      order: 1
-    },
-    {
-      questionId: q3._id,
-      input: '6\n5 1 9 4 2 8',
-      expectedOutput: '8 2 4 9 1 5',
-      isHidden: true,
-      weight: 1,
-      order: 2
-    }
-  ]);
-
-  console.log('[Seeder] Questions and hidden test cases seeded.');
+  // 4. Create Question Pools (At least 10 questions per course per level: 280 questions total)
+  console.log('[Seeder] Seeding at least 10 questions for each course in each level...');
+  const questionsByCourseLevel = await seedAllCourseQuestions(languagesMap, facultyUser._id);
+  console.log('[Seeder] Multi-question pool seeded with 280 algorithmic questions and public/hidden test suites.');
 
   // 5. Helper to create 15 standard collegiate slots (5 Time Windows x 3 Labs x 30 Capacity)
   const standardTimeWindows = [
@@ -350,9 +345,8 @@ export async function runSeed() {
   ];
   const standardLabs = ['Lab 1', 'Lab 2', 'Lab 3'];
 
-  async function createStandardSlots(examinationId: any, examDate: Date, hasFilledExample = false) {
+  async function createStandardSlots(examinationIds: any, examDate: Date) {
     const slotDocs: any[] = [];
-    let isFirst = true;
     for (const win of standardTimeWindows) {
       for (const lab of standardLabs) {
         const startTime = new Date(examDate);
@@ -361,23 +355,15 @@ export async function runSeed() {
         const endTime = new Date(examDate);
         endTime.setHours(win.endH, win.endM, 0, 0);
 
-        // For demonstration of real-time filled slot hiding:
-        // Make the very first slot completely filled (30/30) to prove it is hidden in real time!
-        let regCount = 0;
-        if (hasFilledExample && isFirst) {
-          regCount = 30; // Completely full!
-          isFirst = false;
-        }
-
         slotDocs.push({
-          examinationId,
+          examinationId: Array.isArray(examinationIds) ? examinationIds : [examinationIds],
           slotName: `${win.label} - ${lab}`,
           labName: lab,
           timeWindow: win.label,
           startTime,
           endTime,
-          capacity: 30, // Each lab has strictly 30 slots
-          registeredCount: regCount,
+          capacity: 30, // Strictly 30 seats per physical lab
+          registeredCount: 0, // Starts at 0, strictly synchronized with real student registrations
           isActive: true
         });
       }
@@ -417,14 +403,12 @@ export async function runSeed() {
     durationMinutes: 60,
     maxStudents: 450, // 5 slots * 3 labs * 30 seats
     passingPercentage: 100,
-    questions: [q1._id, q2._id],
+    questions: questionsByCourseLevel.get(`${cLang._id}_lvl_1`) || [],
     allowedLanguages: ['c'],
     instructions: 'Write standard ISO C code. Ensure you handle input from stdin and write to stdout.',
     isPublished: true,
     createdBy: adminUser._id
   });
-
-  await createStandardSlots(examC1._id, today, true);
 
   // C Level 2 Exam (Locked for students until they pass Level 1!)
   const examC2 = await Examination.create({
@@ -438,14 +422,12 @@ export async function runSeed() {
     durationMinutes: 60,
     maxStudents: 450,
     passingPercentage: 100,
-    questions: [q3._id],
+    questions: questionsByCourseLevel.get(`${cLang._id}_lvl_2`) || [],
     allowedLanguages: ['c'],
     instructions: 'Arrays and loop constructs.',
     isPublished: true,
     createdBy: adminUser._id
   });
-
-  await createStandardSlots(examC2._id, today, false);
 
   // Python Level 1 Exam (Today)
   const examPy1 = await Examination.create({
@@ -459,14 +441,12 @@ export async function runSeed() {
     durationMinutes: 60,
     maxStudents: 450,
     passingPercentage: 100,
-    questions: [q1._id, q2._id],
+    questions: questionsByCourseLevel.get(`${pyLang._id}_lvl_1`) || [],
     allowedLanguages: ['python'],
     instructions: 'Write Python 3 code. Read from sys.stdin or input().',
     isPublished: true,
     createdBy: adminUser._id
   });
-
-  await createStandardSlots(examPy1._id, today, false);
 
   // Java Level 1 Exam (Today)
   const examJava1 = await Examination.create({
@@ -480,14 +460,58 @@ export async function runSeed() {
     durationMinutes: 60,
     maxStudents: 450,
     passingPercentage: 100,
-    questions: [q1._id, q2._id],
+    questions: questionsByCourseLevel.get(`${javaLang._id}_lvl_1`) || [],
     allowedLanguages: ['java'],
     instructions: 'Ensure class name is Main.',
     isPublished: true,
     createdBy: adminUser._id
   });
 
-  await createStandardSlots(examJava1._id, today, false);
+  // Strictly ONE set of 15 shared collegiate slots for Today (3 Labs x 30 seats = 90 seats / window, 450 daily capacity shared across C, Python, Java)
+  await createStandardSlots([examC1._id, examC2._id, examPy1._id, examJava1._id], today);
+
+  // Tomorrow's Exams (Registration unlocks strictly tonight at 9:00 PM)
+  const regEndForTomorrow = new Date(tomorrow);
+  regEndForTomorrow.setHours(23, 59, 59, 999);
+
+  const examC1Tomorrow = await Examination.create({
+    title: 'C Programming - Level 1 Foundation Examination',
+    description: 'Comprehensive evaluation of C fundamentals: I/O, arithmetic, conditionals, and logic.',
+    languageId: cLang._id,
+    levelNumber: 1,
+    registrationStartDate: prevDay9pmForTomorrow,
+    registrationEndDate: regEndForTomorrow,
+    examDate: tomorrow,
+    durationMinutes: 60,
+    maxStudents: 450,
+    passingPercentage: 100,
+    questions: questionsByCourseLevel.get(`${cLang._id}_lvl_1`) || [],
+    allowedLanguages: ['c'],
+    instructions: 'Write standard ISO C code. Read from stdin and write to stdout.',
+    isPublished: true,
+    createdBy: adminUser._id
+  });
+
+  const examC2Tomorrow = await Examination.create({
+    title: 'C Programming - Level 2 Intermediate Examination',
+    description: 'Evaluation of arrays, loops, and intermediate problem solving in C.',
+    languageId: cLang._id,
+    levelNumber: 2,
+    registrationStartDate: prevDay9pmForTomorrow,
+    registrationEndDate: regEndForTomorrow,
+    examDate: tomorrow,
+    durationMinutes: 60,
+    maxStudents: 450,
+    passingPercentage: 100,
+    questions: questionsByCourseLevel.get(`${cLang._id}_lvl_2`) || [],
+    allowedLanguages: ['c'],
+    instructions: 'Arrays and loop constructs.',
+    isPublished: true,
+    createdBy: adminUser._id
+  });
+
+  // Strictly ONE set of 15 shared collegiate slots for Tomorrow across C Level 1 & Level 2
+  await createStandardSlots([examC1Tomorrow._id, examC2Tomorrow._id], tomorrow);
 
   // Future Examination (Scheduled for 2 days from now) to clearly demonstrate:
   // "it only shows on previousday 9.00 pm only"
@@ -509,16 +533,103 @@ export async function runSeed() {
     durationMinutes: 60,
     maxStudents: 450,
     passingPercentage: 100,
-    questions: [q1._id, q2._id],
+    questions: questionsByCourseLevel.get(`${cppLang._id}_lvl_1`) || [],
     allowedLanguages: ['cpp'],
     instructions: 'Registration unlocks strictly on the previous day at 9:00 PM.',
     isPublished: true,
     createdBy: adminUser._id
   });
 
-  await createStandardSlots(examFutureCpp._id, futureExamDate, false);
+  // Strictly ONE set of 15 shared collegiate slots for Future Date
+  await createStandardSlots([examFutureCpp._id], futureExamDate);
+
+  // Helper to record a verified passed exam level for a student with points calculation
+  async function seedPassedLevel(student: any, exam: any, language: any, levelNumber: number) {
+    const slot = await ExaminationSlot.findOne({ examinationId: exam._id });
+    const slotId = slot ? slot._id : new mongoose.Types.ObjectId();
+
+    const session = await ExaminationSession.create({
+      examinationId: exam._id,
+      slotId,
+      studentId: student._id,
+      status: 'submitted',
+      clientIp: '127.0.0.1',
+      startedAt: new Date(Date.now() - 7200000),
+      finishedAt: new Date(Date.now() - 3600000),
+      deadline: new Date(Date.now() - 1800000)
+    });
+
+    const result = await ExaminationResult.create({
+      sessionId: session._id,
+      examinationId: exam._id,
+      studentId: student._id,
+      languageId: language._id,
+      levelNumber,
+      totalMarks: 100,
+      obtainedMarks: 100,
+      percentage: 100,
+      passed: true,
+      passingPercentageRequired: 100,
+      submissions: [],
+      verifiedAt: new Date()
+    });
+
+    let progress = await StudentProgress.findOne({ studentId: student._id, languageId: language._id });
+    if (!progress) {
+      progress = await StudentProgress.create({
+        studentId: student._id,
+        languageId: language._id,
+        highestUnlockedLevel: levelNumber + 1,
+        completedLevels: [
+          {
+            levelNumber,
+            passedAt: new Date(),
+            percentage: 100,
+            obtainedMarks: 100,
+            totalMarks: 100,
+            examinationId: exam._id,
+            resultId: result._id
+          }
+        ],
+        isEnrolled: true,
+        enrolledLevels: []
+      });
+    } else {
+      progress.highestUnlockedLevel = Math.max(progress.highestUnlockedLevel, levelNumber + 1);
+      if (!progress.completedLevels.some((c) => c.levelNumber === levelNumber)) {
+        progress.completedLevels.push({
+          levelNumber,
+          passedAt: new Date(),
+          percentage: 100,
+          obtainedMarks: 100,
+          totalMarks: 100,
+          examinationId: exam._id,
+          resultId: result._id
+        });
+      }
+      await progress.save();
+    }
+  }
+
+  // Seed merit achievements for student ranking demo:
+  // 1. Aarav Sharma (Year 3 CSE): Passed C Level 1 (2 pts) + C Level 2 (4 pts) = 6 pts (Rank 1)
+  await seedPassedLevel(student1, examC1, cLang, 1);
+  await seedPassedLevel(student1, examC2, cLang, 2);
+
+  // 2. Ananya Iyer (Year 4 CSE): Passed C Level 1 (2 pts) + Python Level 1 (2 pts) = 4 pts (Rank 2)
+  await seedPassedLevel(student4, examC1, cLang, 1);
+  await seedPassedLevel(student4, examPy1, pyLang, 1);
+
+  // 3. Priya Patel (Year 2 IT): Passed C Level 1 (2 pts) = 2 pts (Rank 3)
+  await seedPassedLevel(student2, examC1, cLang, 1);
+
+  // 4. Rohan Verma (Year 1 ECE): Passed C Level 1 (2 pts) = 2 pts (Rank 4)
+  await seedPassedLevel(student3, examC1, cLang, 1);
+
+  // 5. Kavya Reddy (Year 2 EEE): 0 pts (Rank 5)
 
   console.log('[Seeder] Examinations published for C (Levels 1 & 2), Python (Level 1), Java (Level 1), C++ (Level 1).');
+  console.log('[Seeder] Seeded student merit achievements: Aarav (6 pts, Rank 1), Ananya (4 pts, Rank 2), Priya (2 pts, Rank 3), Rohan (2 pts, Rank 4), Kavya (0 pts).');
   console.log('[Seeder] Database seeding finished successfully.');
 
   await mongoose.disconnect();

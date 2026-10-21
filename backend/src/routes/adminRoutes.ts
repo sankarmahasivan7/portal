@@ -10,6 +10,8 @@ import {
   getLanguages,
   createLanguage,
   updateLanguage,
+  getLanguageCourseDetails,
+  updateLanguageLevelDetails,
   getQuestions,
   createQuestion,
   updateQuestion,
@@ -59,6 +61,8 @@ router.get('/students/export-csv', requireRole(['admin']), exportStudentsCsv);
 router.get('/languages', requireRole(['admin', 'faculty']), getLanguages);
 router.post('/languages', requireRole(['admin']), createLanguage);
 router.patch('/languages/:id', requireRole(['admin']), updateLanguage);
+router.get('/languages/:id/details', requireRole(['admin', 'faculty', 'controller']), getLanguageCourseDetails);
+router.put('/languages/:id/levels', requireRole(['admin']), updateLanguageLevelDetails);
 
 // Question Bank Management (Admin)
 router.get('/questions', requireRole(['admin', 'faculty']), getQuestions);

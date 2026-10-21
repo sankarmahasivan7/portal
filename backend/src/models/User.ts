@@ -9,6 +9,9 @@ export interface IUser extends Document {
   firstName: string;
   lastName: string;
   studentId?: string; // e.g. CS2026-042 for students
+  department?: string;
+  year?: number; // 1, 2, 3, 4
+  section?: string;
   isActive: boolean;
   collegeIpExempt: boolean;
   createdAt: Date;
@@ -23,6 +26,9 @@ const UserSchema = new Schema<IUser>(
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     studentId: { type: String, sparse: true, index: true },
+    department: { type: String, default: 'Computer Science and Engineering', index: true },
+    year: { type: Number, default: 1, min: 1, max: 4, index: true },
+    section: { type: String, default: 'A' },
     isActive: { type: Boolean, default: true },
     collegeIpExempt: { type: Boolean, default: false }
   },

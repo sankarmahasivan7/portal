@@ -22,7 +22,7 @@ const SubmissionOtpSchema = new Schema<ISubmissionOtp>(
     examinationId: { type: Schema.Types.ObjectId, ref: 'Examination' },
     otp: { type: String, required: true, index: true },
     generatedAt: { type: Date, required: true, default: Date.now },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
     generatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     isUsed: { type: Boolean, default: false },
     usedAt: { type: Date },
@@ -31,6 +31,8 @@ const SubmissionOtpSchema = new Schema<ISubmissionOtp>(
   { timestamps: true }
 );
 
+// MongoDB TTL index: automatically deletes expired OTPs after 300 seconds (5 minutes)
+SubmissionOtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 300 });
 SubmissionOtpSchema.index({ otp: 1, expiresAt: 1 });
 
 export const SubmissionOtp = mongoose.model<ISubmissionOtp>('SubmissionOtp', SubmissionOtpSchema);

@@ -16,7 +16,9 @@ import {
   X,
   Layers,
   GraduationCap,
-  UserCheck
+  UserCheck,
+  History,
+  Trophy
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -38,7 +40,7 @@ export const Navbar: React.FC = () => {
           {/* Logo & Portal Name */}
           <div className="flex items-center space-x-3">
             <Link
-              to={isStudent ? '/student/total-courses' : user.role === 'faculty' ? '/admin/exams' : '/admin/overview'}
+              to={isStudent ? '/student/total-courses' : user.role === 'faculty' ? '/admin/exams' : '/admin/languages'}
               className="flex items-center space-x-2.5"
             >
               <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600 shadow-xs">
@@ -80,6 +82,17 @@ export const Navbar: React.FC = () => {
                     <span>My Courses</span>
                   </Link>
 
+                  <Link
+                    to="/student/slot-history"
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
+                      isActive('/student/slot-history')
+                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    <History className="w-4 h-4" />
+                    <span>Slot History</span>
+                  </Link>
                 </>
               )}
 
@@ -113,28 +126,6 @@ export const Navbar: React.FC = () => {
               {user.role !== 'student' && user.role !== 'faculty' && (
                 <>
                   <Link
-                    to="/admin/overview"
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                      isActive('/admin/overview')
-                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    <span>Overview</span>
-                  </Link>
-                  <Link
-                    to="/admin/students"
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                      isActive('/admin/students')
-                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Users className="w-4 h-4" />
-                    <span>Students</span>
-                  </Link>
-                  <Link
                     to="/admin/languages"
                     className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
                       isActive('/admin/languages')
@@ -143,7 +134,7 @@ export const Navbar: React.FC = () => {
                     }`}
                   >
                     <Code2 className="w-4 h-4" />
-                    <span>Languages</span>
+                    <span>Courses</span>
                   </Link>
                   <Link
                     to="/admin/questions"
@@ -157,28 +148,6 @@ export const Navbar: React.FC = () => {
                     <span>Questions</span>
                   </Link>
                   <Link
-                    to="/admin/exams"
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                      isActive('/admin/exams')
-                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4" />
-                    <span>Exams</span>
-                  </Link>
-                  <Link
-                    to="/admin/attendance"
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                      isActive('/admin/attendance')
-                        ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <UserCheck className="w-4 h-4" />
-                    <span>Attendance</span>
-                  </Link>
-                  <Link
                     to="/admin/results"
                     className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
                       isActive('/admin/results')
@@ -186,22 +155,9 @@ export const Navbar: React.FC = () => {
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                   >
-                    <Award className="w-4 h-4" />
-                    <span>Results</span>
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                    <span>Rankings</span>
                   </Link>
-                  {user.role === 'admin' && (
-                    <Link
-                      to="/admin/security"
-                      className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
-                        isActive('/admin/security')
-                          ? 'bg-teal-50 text-teal-700 border border-teal-200 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                      }`}
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Security & Audit</span>
-                    </Link>
-                  )}
                 </>
               )}
             </div>
@@ -268,6 +224,13 @@ export const Navbar: React.FC = () => {
               >
                 My Courses
               </Link>
+              <Link
+                to="/student/slot-history"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              >
+                Slot History
+              </Link>
             </>
           ) : user.role === 'faculty' ? (
             <>
@@ -289,25 +252,11 @@ export const Navbar: React.FC = () => {
           ) : (
             <>
               <Link
-                to="/admin/overview"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              >
-                Overview
-              </Link>
-              <Link
-                to="/admin/students"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              >
-                Students
-              </Link>
-              <Link
                 to="/admin/languages"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
               >
-                Languages
+                Courses
               </Link>
               <Link
                 to="/admin/questions"
@@ -317,35 +266,12 @@ export const Navbar: React.FC = () => {
                 Questions
               </Link>
               <Link
-                to="/admin/exams"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              >
-                Exams
-              </Link>
-              <Link
-                to="/admin/attendance"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              >
-                Attendance Gate
-              </Link>
-              <Link
                 to="/admin/results"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
               >
-                Results
+                Rankings & Results
               </Link>
-              {user.role === 'admin' && (
-                <Link
-                  to="/admin/security"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-                >
-                  Security & Audit
-                </Link>
-              )}
             </>
           )}
 

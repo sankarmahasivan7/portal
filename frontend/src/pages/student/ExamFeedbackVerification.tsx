@@ -3,7 +3,6 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import {
-  Star,
   ShieldCheck,
   Clock,
   AlertCircle,
@@ -12,7 +11,9 @@ import {
   ArrowRight,
   LogOut,
   Award,
-  Users
+  Users,
+  BookOpen,
+  MessageSquare
 } from 'lucide-react';
 
 export const ExamFeedbackVerification: React.FC = () => {
@@ -24,10 +25,7 @@ export const ExamFeedbackVerification: React.FC = () => {
   const [examData, setExamData] = useState<any>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
 
-  // Form states
-  const [rating, setRating] = useState<number>(5);
-  const [hoverRating, setHoverRating] = useState<number | null>(null);
-  const [difficulty, setDifficulty] = useState<'easy' | 'moderate' | 'hard' | 'very_hard'>('moderate');
+  // Form states - OTP and feedback textbox only
   const [comments, setComments] = useState<string>('');
   const [otp, setOtp] = useState<string>('');
 
@@ -61,7 +59,7 @@ export const ExamFeedbackVerification: React.FC = () => {
     }
   }, [sessionId]);
 
-  // Auto-logout countdown once OTP is verified
+  // Auto-redirect countdown once OTP is verified
   useEffect(() => {
     if (!isSubmitted) return;
 
@@ -69,7 +67,7 @@ export const ExamFeedbackVerification: React.FC = () => {
       setLogoutTimer((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          handleLogoutNow();
+          handleRedirectToCourses();
           return 0;
         }
         return prev - 1;
@@ -79,9 +77,8 @@ export const ExamFeedbackVerification: React.FC = () => {
     return () => clearInterval(interval);
   }, [isSubmitted]);
 
-  const handleLogoutNow = () => {
-    logout();
-    navigate('/login');
+  const handleRedirectToCourses = () => {
+    navigate('/student/total-courses');
   };
 
   const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,8 +106,6 @@ export const ExamFeedbackVerification: React.FC = () => {
     try {
       const res = await api.post(`/exams/session/${sessionId}/finalize-with-feedback`, {
         otp: otp.trim(),
-        rating,
-        difficulty,
         comments: comments.trim()
       });
 
@@ -136,13 +131,6 @@ export const ExamFeedbackVerification: React.FC = () => {
     }
   };
 
-  const difficultyOptions: { value: 'easy' | 'moderate' | 'hard' | 'very_hard'; label: string; desc: string }[] = [
-    { value: 'easy', label: 'Easy', desc: 'Straightforward' },
-    { value: 'moderate', label: 'Moderate', desc: 'Balanced & fair' },
-    { value: 'hard', label: 'Challenging', desc: 'Required deep effort' },
-    { value: 'very_hard', label: 'Very Tough', desc: 'Highly complex' }
-  ];
-
   // Success & Logout Modal / Screen
   if (isSubmitted) {
     return (
@@ -161,19 +149,19 @@ export const ExamFeedbackVerification: React.FC = () => {
             </p>
           </div>
 
-          {/* Logout Notice & Auto-logout countdown */}
+          {/* Redirect Notice & Auto-redirect countdown */}
           <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
-            <span className="text-slate-400 font-semibold block">Logging out from examination page in</span>
+            <span className="text-slate-400 font-semibold block">Redirecting to Total Courses in</span>
             <span className="text-2xl font-mono font-black text-emerald-400 block">{logoutTimer} seconds</span>
           </div>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
-              onClick={handleLogoutNow}
-              className="w-full sm:w-auto px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-rose-900/30"
+              onClick={handleRedirectToCourses}
+              className="w-full sm:w-auto px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-teal-900/30"
             >
-              <LogOut className="w-4 h-4" />
-              <span>Log Out Now</span>
+              <BookOpen className="w-4 h-4" />
+              <span>Go to Total Courses Now</span>
             </button>
 
             <button
@@ -323,94 +311,30 @@ export const ExamFeedbackVerification: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: Student Feedback & Experience */}
-          <div className="bg-slate-950/70 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-sm space-y-6">
+          {/* Card 2: Student Feedback */}
+          <div className="bg-slate-950/70 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-sm space-y-4">
             <div className="flex items-center space-x-3 border-b border-slate-800/80 pb-4">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center">
-                <Star className="w-4 h-4 fill-purple-400" />
+              <div className="w-9 h-9 rounded-xl bg-teal-500/15 text-teal-400 flex items-center justify-center">
+                <MessageSquare className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-extrabold text-white">Your Examination Feedback</h3>
-                <p className="text-xs text-slate-400">Help the department improve future test questions and platform quality</p>
+                <h3 className="text-sm font-extrabold text-white">Student Feedback</h3>
+                <p className="text-xs text-slate-400">Share your feedback or comments on the exam (Optional)</p>
               </div>
             </div>
 
-            {/* 1. Star Rating */}
+            {/* Feedback Comments Text Box */}
             <div className="space-y-2">
-              <span className="block text-xs font-bold text-slate-300">
-                1. How was your overall examination experience?
-              </span>
-              <div className="flex items-center space-x-2 pt-1">
-                {[1, 2, 3, 4, 5].map((starVal) => {
-                  const isActive = (hoverRating !== null ? hoverRating : rating) >= starVal;
-                  return (
-                    <button
-                      key={starVal}
-                      type="button"
-                      onMouseEnter={() => setHoverRating(starVal)}
-                      onMouseLeave={() => setHoverRating(null)}
-                      onClick={() => setRating(starVal)}
-                      className="p-1 rounded-lg transition hover:scale-110 focus:outline-none"
-                    >
-                      <Star
-                        className={`w-7 h-7 sm:w-8 sm:h-8 transition ${
-                          isActive
-                            ? 'text-amber-400 fill-amber-400 drop-shadow-sm'
-                            : 'text-slate-700 hover:text-slate-600'
-                        }`}
-                      />
-                    </button>
-                  );
-                })}
-                <span className="text-xs font-semibold text-slate-400 ml-3">
-                  {rating === 5 && '🌟 Outstanding'}
-                  {rating === 4 && '👍 Very Good'}
-                  {rating === 3 && '👌 Satisfactory'}
-                  {rating === 2 && '👎 Needs Improvement'}
-                  {rating === 1 && '⚠️ Poor'}
-                </span>
-              </div>
-            </div>
-
-            {/* 2. Difficulty Level */}
-            <div className="space-y-2">
-              <span className="block text-xs font-bold text-slate-300">
-                2. How would you rate the problem difficulty?
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-                {difficultyOptions.map((opt) => {
-                  const isSelected = difficulty === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setDifficulty(opt.value)}
-                      className={`p-3 rounded-2xl border text-left transition ${
-                        isSelected
-                          ? 'bg-teal-500/15 border-teal-500 text-teal-300 shadow-sm'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
-                      }`}
-                    >
-                      <span className="block text-xs font-bold text-white">{opt.label}</span>
-                      <span className="text-[11px] text-slate-400 block mt-0.5">{opt.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 3. Feedback Comments */}
-            <div className="space-y-2">
-              <label htmlFor="comments" className="block text-xs font-bold text-slate-300">
-                3. Additional feedback / comments (Optional)
+              <label htmlFor="comments" className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                Feedback Comments
               </label>
               <textarea
                 id="comments"
-                rows={3}
+                rows={4}
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
                 placeholder="Share any thoughts on question clarity, compiler experience, or suggestions..."
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition resize-y"
               />
             </div>
           </div>

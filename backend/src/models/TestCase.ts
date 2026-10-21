@@ -23,5 +23,7 @@ const TestCaseSchema = new Schema<ITestCase>(
   { timestamps: true }
 );
 
+TestCaseSchema.index({ questionId: 1, isHidden: 1 });
+
 export const TestCase = mongoose.model<ITestCase>('TestCase', TestCaseSchema);
 

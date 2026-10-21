@@ -19,6 +19,7 @@ import {
   AlertCircle,
   Key
 } from 'lucide-react';
+import { formatSlotDate } from '../../utils/dateUtils';
 import { AssignCourseExamModal } from '../../components/admin/AssignCourseExamModal';
 import { FacultyOtpModal } from '../../components/admin/FacultyOtpModal';
 
@@ -78,6 +79,7 @@ export const AttendanceManagement: React.FC = () => {
   const [selectedTiming, setSelectedTiming] = useState<string>(initialTiming);
   const [selectedLab, setSelectedLab] = useState<string>(initialLab);
   const [timeWindows, setTimeWindows] = useState<string[]>(STANDARD_TIMINGS);
+  const [timeWindowDates, setTimeWindowDates] = useState<Record<string, string>>({});
 
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [summary, setSummary] = useState<any>({
@@ -137,6 +139,9 @@ export const AttendanceManagement: React.FC = () => {
         setSummary(res.data.summary);
         if (res.data.timeWindows && res.data.timeWindows.length > 0) {
           setTimeWindows(res.data.timeWindows);
+        }
+        if (res.data.timeWindowDates) {
+          setTimeWindowDates(res.data.timeWindowDates);
         }
 
         // Collect distinct courses present in this slot timing
@@ -330,8 +335,11 @@ export const AttendanceManagement: React.FC = () => {
                 <Clock className="w-4 h-4 text-teal-600" />
                 <span>Select Examination Slot Timing (Sorted By Timing Window)</span>
               </label>
-              <span className="text-[11px] text-teal-700 font-semibold bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
-                Active Slot: {selectedTiming}
+              <span className="text-[11px] text-teal-700 font-semibold bg-teal-50 px-3 py-1 rounded-full border border-teal-200 flex items-center space-x-1.5">
+                <Calendar className="w-3 h-3 text-teal-600 inline" />
+                <span>Date: <strong className="font-bold">{formatSlotDate(timeWindowDates[selectedTiming] || students[0]?.slot?.startTime)}</strong></span>
+                <span>•</span>
+                <span>Active Slot: <strong className="font-bold">{selectedTiming}</strong></span>
               </span>
             </div>
 
@@ -339,6 +347,7 @@ export const AttendanceManagement: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
               {timeWindows.map((tw) => {
                 const isSelected = selectedTiming.startsWith(tw.split(' ')[0]);
+                const slotDateStr = timeWindowDates[tw];
                 return (
                   <button
                     key={tw}
@@ -349,7 +358,9 @@ export const AttendanceManagement: React.FC = () => {
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
                     }`}
                   >
-                    <span className="text-[11px] uppercase tracking-wider opacity-80">Window</span>
+                    <span className={`text-[10px] uppercase tracking-wider font-semibold ${isSelected ? 'text-teal-100' : 'text-teal-700'}`}>
+                      {formatSlotDate(slotDateStr)}
+                    </span>
                     <span className="text-xs sm:text-sm font-extrabold truncate w-full text-center">
                       {tw}
                     </span>
@@ -587,8 +598,15 @@ export const AttendanceManagement: React.FC = () => {
                         </td>
 
                         <td className="py-3.5 px-4 text-slate-700">
-                          <div className="font-semibold">{item.slot?.labName || 'Lab'}</div>
-                          <div className="text-[11px] text-slate-400">{item.slot?.timeWindow}</div>
+                          <div className="font-semibold text-slate-900">{item.slot?.labName || 'Lab'}</div>
+                          <div className="text-[11px] text-teal-700 font-medium flex items-center space-x-1">
+                            <Calendar className="w-3 h-3 text-teal-600 inline shrink-0" />
+                            <span>{formatSlotDate(item.slot?.startTime)}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center space-x-1">
+                            <Clock className="w-3 h-3 text-slate-400 inline shrink-0" />
+                            <span>{item.slot?.timeWindow}</span>
+                          </div>
                         </td>
 
                         <td className="py-3.5 px-4">

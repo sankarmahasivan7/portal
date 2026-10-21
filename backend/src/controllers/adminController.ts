@@ -21,6 +21,7 @@ import { ExaminationSession } from '../models/ExaminationSession';
 import { SubmissionOtp } from '../models/SubmissionOtp';
 import { checkWorkerHealth } from '../services/ExecutionClient';
 import { logAudit } from '../services/AuditService';
+import { parseCollegeEmail, ALL_COLLEGE_DEPARTMENTS } from '../utils/collegeEmail';
 
 // OVERVIEW & METRICS
 export async function getOverviewStats(_req: AuthRequest, res: Response) {
@@ -308,26 +309,38 @@ export async function getLanguages(_req: AuthRequest, res: Response) {
 
 export async function createLanguage(req: AuthRequest, res: Response) {
   try {
-    const { name, slug, executionEngineId, totalLevels, defaultTimeLimitMs, defaultMemoryLimitMb, templateCode } = req.body;
+    const {
+      name,
+      slug,
+      executionEngineId,
+      totalLevels,
+      defaultTimeLimitMs,
+      defaultMemoryLimitMb,
+      templateCode,
+      description
+    } = req.body;
 
     // Check worker compiler support before allowing creation
     const health = await checkWorkerHealth();
-    if (!health.details?.compilers?.[executionEngineId]) {
+    if (health.healthy && health.details?.compilers && !health.details.compilers[executionEngineId]) {
       return res.status(400).json({
         success: false,
         message: `Compiler or runtime for execution engine '${executionEngineId}' is not installed or available on the execution worker.`
       });
     }
 
+    const generatedSlug = (slug || name).toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
     const language = await ProgrammingLanguage.create({
       name,
-      slug: slug.toLowerCase(),
-      executionEngineId,
-      totalLevels: totalLevels || 4,
+      slug: generatedSlug,
+      executionEngineId: executionEngineId || 'c',
+      totalLevels: Number(totalLevels) || 4,
       isEnabled: true,
-      defaultTimeLimitMs: defaultTimeLimitMs || 4000,
-      defaultMemoryLimitMb: defaultMemoryLimitMb || 256,
-      templateCode: templateCode || ''
+      defaultTimeLimitMs: Number(defaultTimeLimitMs) || 4000,
+      defaultMemoryLimitMb: Number(defaultMemoryLimitMb) || 256,
+      templateCode: templateCode || '',
+      description: description || `Comprehensive training track and assessment curricula for ${name}.`
     });
 
     // Create levels
@@ -336,67 +349,141 @@ export async function createLanguage(req: AuthRequest, res: Response) {
         languageId: language._id,
         levelNumber: i,
         title: `${name} Level ${i}`,
-        description: `Curriculum and assessments for Level ${i}`,
+        description: `Curriculum and practical assessments for Level ${i}`,
         defaultPassingPercentage: 100,
         prerequisiteLevel: i === 1 ? null : i - 1
       });
     }
 
-    await logAudit('LANGUAGE_CREATED', { languageId: language._id, name }, req);
+    await logAudit('COURSE_CREATED', { languageId: language._id, name }, req);
     return res.status(201).json({ success: true, language });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Language creation failed', error: error.message });
+    return res.status(500).json({ success: false, message: 'Course creation failed', error: error.message });
   }
 }
 
 export async function updateLanguage(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
-    const { isEnabled, totalLevels, defaultTimeLimitMs, defaultMemoryLimitMb, templateCode } = req.body;
+    const { name, isEnabled, totalLevels, defaultTimeLimitMs, defaultMemoryLimitMb, templateCode, description } = req.body;
 
     const language = await ProgrammingLanguage.findById(id);
     if (!language) {
-      return res.status(404).json({ success: false, message: 'Language not found.' });
+      return res.status(404).json({ success: false, message: 'Course not found.' });
     }
 
     if (isEnabled === true) {
       const health = await checkWorkerHealth();
-      if (!health.details?.compilers?.[language.executionEngineId]) {
+      if (health.healthy && health.details?.compilers && !health.details.compilers[language.executionEngineId]) {
         return res.status(400).json({
           success: false,
-          message: `Cannot enable language: Compiler/runtime for '${language.executionEngineId}' is not detected on the execution worker.`
+          message: `Cannot enable course: Compiler/runtime for '${language.executionEngineId}' is not detected on the execution worker.`
         });
       }
     }
 
+    if (name !== undefined) language.name = name;
+    if (description !== undefined) language.description = description;
     if (isEnabled !== undefined) language.isEnabled = isEnabled;
-    if (totalLevels !== undefined) language.totalLevels = totalLevels;
-    if (defaultTimeLimitMs !== undefined) language.defaultTimeLimitMs = defaultTimeLimitMs;
-    if (defaultMemoryLimitMb !== undefined) language.defaultMemoryLimitMb = defaultMemoryLimitMb;
+    if (totalLevels !== undefined) language.totalLevels = Number(totalLevels);
+    if (defaultTimeLimitMs !== undefined) language.defaultTimeLimitMs = Number(defaultTimeLimitMs);
+    if (defaultMemoryLimitMb !== undefined) language.defaultMemoryLimitMb = Number(defaultMemoryLimitMb);
     if (templateCode !== undefined) language.templateCode = templateCode;
 
     await language.save();
-    await logAudit('LANGUAGE_UPDATED', { languageId: id, isEnabled }, req);
+    await logAudit('COURSE_UPDATED', { languageId: id, isEnabled, name: language.name }, req);
 
     return res.json({ success: true, language });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Language update error', error: error.message });
+    return res.status(500).json({ success: false, message: 'Course update error', error: error.message });
+  }
+}
+
+export async function getLanguageCourseDetails(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const language = await ProgrammingLanguage.findById(id).lean();
+    if (!language) {
+      return res.status(404).json({ success: false, message: 'Course not found.' });
+    }
+
+    const levels = await ProgrammingLevel.find({ languageId: id }).sort({ levelNumber: 1 }).lean();
+
+    const levelsWithStats = await Promise.all(
+      levels.map(async (lvl) => {
+        const questionCount = await Question.countDocuments({
+          $or: [
+            { languageId: id, targetLevel: lvl.levelNumber, isArchived: false },
+            { targetLevel: lvl.levelNumber, isArchived: false, allowedLanguages: language.executionEngineId }
+          ]
+        });
+        return {
+          ...lvl,
+          questionCount
+        };
+      })
+    );
+
+    return res.json({
+      success: true,
+      course: {
+        ...language,
+        levels: levelsWithStats
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Error retrieving course details', error: error.message });
+  }
+}
+
+export async function updateLanguageLevelDetails(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const { levels } = req.body; // Array of { levelNumber, title, description }
+
+    if (!Array.isArray(levels)) {
+      return res.status(400).json({ success: false, message: 'levels array is required' });
+    }
+
+    for (const lvl of levels) {
+      if (lvl.levelNumber) {
+        await ProgrammingLevel.findOneAndUpdate(
+          { languageId: id, levelNumber: lvl.levelNumber },
+          {
+            $set: {
+              ...(lvl.title ? { title: lvl.title } : {}),
+              ...(lvl.description !== undefined ? { description: lvl.description } : {})
+            }
+          }
+        );
+      }
+    }
+
+    await logAudit('COURSE_LEVELS_UPDATED', { languageId: id }, req);
+    return res.json({ success: true, message: 'Course levels updated successfully.' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Error updating level details', error: error.message });
   }
 }
 
 // QUESTION MANAGEMENT
 export async function getQuestions(req: AuthRequest, res: Response) {
   try {
-    const { level, difficulty, search } = req.query;
+    const { level, targetLevel, difficulty, search, languageId } = req.query;
     const query: any = { isArchived: false };
 
-    if (level) query.targetLevel = parseInt(level as string, 10);
+    const selectedLevel = level || targetLevel;
+    if (selectedLevel) query.targetLevel = parseInt(selectedLevel as string, 10);
     if (difficulty) query.difficulty = difficulty;
+    if (languageId) query.languageId = languageId;
     if (search) query.title = { $regex: search, $options: 'i' };
 
-    const questions = await Question.find(query).sort({ targetLevel: 1, createdAt: -1 });
+    const questions = await Question.find(query)
+      .populate('languageId', 'name slug executionEngineId')
+      .sort({ targetLevel: 1, createdAt: -1 })
+      .lean();
     const qIds = questions.map((q) => q._id);
-    const testCases = await TestCase.find({ questionId: { $in: qIds } }).sort({ order: 1 });
+    const testCases = await TestCase.find({ questionId: { $in: qIds } }).sort({ order: 1 }).lean();
 
     const tcMap = new Map<string, any[]>();
     testCases.forEach((tc) => {
@@ -406,7 +493,7 @@ export async function getQuestions(req: AuthRequest, res: Response) {
     });
 
     const enriched = questions.map((q) => ({
-      ...q.toObject(),
+      ...q,
       testCases: tcMap.get(q._id.toString()) || []
     }));
 
@@ -426,6 +513,7 @@ export async function createQuestion(req: AuthRequest, res: Response) {
       constraints,
       examples,
       allowedLanguages,
+      languageId,
       targetLevel,
       difficulty,
       marks,
@@ -447,6 +535,7 @@ export async function createQuestion(req: AuthRequest, res: Response) {
       constraints,
       examples: examples || [],
       allowedLanguages: allowedLanguages || ['c', 'cpp', 'java', 'python'],
+      languageId: languageId || undefined,
       targetLevel: targetLevel || 1,
       difficulty: difficulty || 'Easy',
       marks: marks || 100,
@@ -518,14 +607,21 @@ export async function getAdminExams(_req: AuthRequest, res: Response) {
   try {
     const exams = await Examination.find().populate('languageId').sort({ createdAt: -1 });
     const examIds = exams.map((e) => e._id);
-    const slots = await ExaminationSlot.find({ examinationId: { $in: examIds } });
-    const registrations = await ExaminationRegistration.find({ examinationId: { $in: examIds } });
+    const slots = await ExaminationSlot.find({ examinationId: { $in: examIds } }).sort({ startTime: 1, labName: 1 });
+    const registrations = await ExaminationRegistration.find({ examinationId: { $in: examIds }, status: { $ne: 'cancelled' } });
 
     const slotMap = new Map<string, any[]>();
     slots.forEach((s) => {
-      const eId = s.examinationId.toString();
-      if (!slotMap.has(eId)) slotMap.set(eId, []);
-      slotMap.get(eId)!.push(s);
+      const eIds = Array.isArray(s.examinationId)
+        ? s.examinationId.map((id: any) => id.toString())
+        : [s.examinationId?.toString()];
+
+      eIds.forEach((eId: string) => {
+        if (eId) {
+          if (!slotMap.has(eId)) slotMap.set(eId, []);
+          slotMap.get(eId)!.push(s);
+        }
+      });
     });
 
     const regMap = new Map<string, number>();
@@ -540,7 +636,34 @@ export async function getAdminExams(_req: AuthRequest, res: Response) {
       registeredCount: regMap.get(e._id.toString()) || 0
     }));
 
-    return res.json({ success: true, exams: enriched });
+    // Calculate actual active registrations per slot from ExaminationRegistration
+    const regCountsBySlot = new Map<string, number>();
+    const allActiveRegs = await ExaminationRegistration.find({
+      status: { $in: ['registered', 'attended'] }
+    }).select('slotId');
+    allActiveRegs.forEach((r) => {
+      if (r.slotId) {
+        const sId = r.slotId.toString();
+        regCountsBySlot.set(sId, (regCountsBySlot.get(sId) || 0) + 1);
+      }
+    });
+
+    // Campus-wide distinct collegiate slots (Lab 1, Lab 2, Lab 3 across standard windows)
+    const distinctCollegiateSlots = await ExaminationSlot.find({ isActive: true })
+      .sort({ startTime: 1, labName: 1 });
+
+    const syncedCollegiateSlots = distinctCollegiateSlots.map((s) => {
+      const realCount = Math.max(s.registeredCount || 0, regCountsBySlot.get(s._id.toString()) || 0);
+      const obj = s.toObject();
+      obj.registeredCount = realCount;
+      return obj;
+    });
+
+    return res.json({
+      success: true,
+      exams: enriched,
+      collegiateSlots: syncedCollegiateSlots
+    });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Exams fetch error', error: error.message });
   }
@@ -617,38 +740,55 @@ export async function createExam(req: AuthRequest, res: Response) {
       }));
       await ExaminationSlot.insertMany(slotDocs);
     } else {
-      const standardTimeWindows = [
-        { startH: 9, startM: 15, endH: 10, endM: 15, label: '09:15 to 10:15' },
-        { startH: 10, startM: 25, endH: 11, endM: 25, label: '10:25 to 11:25' },
-        { startH: 11, startM: 35, endH: 12, endM: 35, label: '11:35 to 12:35' },
-        { startH: 13, startM: 30, endH: 14, endM: 30, label: '1:30 to 2:30 (13:30 - 14:30)' },
-        { startH: 14, startM: 45, endH: 15, endM: 45, label: '2:45 to 3:45 (14:45 - 15:45)' }
-      ];
-      const labs = ['Lab 1', 'Lab 2', 'Lab 3'];
+      const startOfDay = new Date(parsedExamDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(parsedExamDate);
+      endOfDay.setHours(23, 59, 59, 999);
 
-      const slotDocs: any[] = [];
-      for (const win of standardTimeWindows) {
-        for (const lab of labs) {
-          const startTime = new Date(parsedExamDate);
-          startTime.setHours(win.startH, win.startM, 0, 0);
+      const existingSlots = await ExaminationSlot.find({
+        startTime: { $gte: startOfDay, $lte: endOfDay }
+      });
 
-          const endTime = new Date(parsedExamDate);
-          endTime.setHours(win.endH, win.endM, 0, 0);
+      if (existingSlots.length > 0) {
+        // Link new exam to existing shared collegiate slots for this date
+        await ExaminationSlot.updateMany(
+          { startTime: { $gte: startOfDay, $lte: endOfDay } },
+          { $addToSet: { examinationId: exam._id } }
+        );
+      } else {
+        const standardTimeWindows = [
+          { startH: 9, startM: 15, endH: 10, endM: 15, label: '09:15 to 10:15' },
+          { startH: 10, startM: 25, endH: 11, endM: 25, label: '10:25 to 11:25' },
+          { startH: 11, startM: 35, endH: 12, endM: 35, label: '11:35 to 12:35' },
+          { startH: 13, startM: 30, endH: 14, endM: 30, label: '1:30 to 2:30 (13:30 - 14:30)' },
+          { startH: 14, startM: 45, endH: 15, endM: 45, label: '2:45 to 3:45 (14:45 - 15:45)' }
+        ];
+        const labs = ['Lab 1', 'Lab 2', 'Lab 3'];
 
-          slotDocs.push({
-            examinationId: exam._id,
-            slotName: `${win.label} - ${lab}`,
-            labName: lab,
-            timeWindow: win.label,
-            startTime,
-            endTime,
-            capacity: 30, // Each lab has strictly 30 slots
-            registeredCount: 0,
-            isActive: true
-          });
+        const slotDocs: any[] = [];
+        for (const win of standardTimeWindows) {
+          for (const lab of labs) {
+            const startTime = new Date(parsedExamDate);
+            startTime.setHours(win.startH, win.startM, 0, 0);
+
+            const endTime = new Date(parsedExamDate);
+            endTime.setHours(win.endH, win.endM, 0, 0);
+
+            slotDocs.push({
+              examinationId: [exam._id],
+              slotName: `${win.label} - ${lab}`,
+              labName: lab,
+              timeWindow: win.label,
+              startTime,
+              endTime,
+              capacity: 30, // Each physical lab strictly has 30 seats
+              registeredCount: 0,
+              isActive: true
+            });
+          }
         }
+        await ExaminationSlot.insertMany(slotDocs);
       }
-      await ExaminationSlot.insertMany(slotDocs);
     }
 
     await logAudit('EXAMINATION_CREATED', { examId: exam._id, title }, req);
@@ -697,45 +837,309 @@ export async function addExamSlot(req: AuthRequest, res: Response) {
   }
 }
 
-// RESULTS & REPORTS
+// RESULTS & LEADERBOARD RANKING (LEVEL POINTS SYSTEM: L1=2pts, L2=4pts, +2pts/lvl)
+export async function getStudentRankingsData() {
+  const [students, profiles, passedResults, progressDocs] = await Promise.all([
+    User.find({ role: 'student', isActive: true })
+      .select('_id firstName lastName email studentId department year section')
+      .lean(),
+    StudentProfile.find().lean(),
+    ExaminationResult.find({ passed: true })
+      .populate('examinationId', 'title levelNumber')
+      .populate('languageId', 'name slug')
+      .sort({ verifiedAt: 1 })
+      .lean(),
+    StudentProgress.find()
+      .populate('languageId', 'name slug')
+      .lean()
+  ]);
+
+  const profileMap = new Map<string, any>(
+    profiles.map((p: any) => [p.userId.toString(), p])
+  );
+
+  // Group unique cleared levels per student: Map<studentId, Map<languageId_levelNumber, clearedLevelObj>>
+  const studentLevelsMap = new Map<string, Map<string, any>>();
+
+  // 1. Process from ExaminationResult
+  for (const r of passedResults) {
+    if (!r.studentId) continue;
+    const sId = (r.studentId as any)._id ? (r.studentId as any)._id.toString() : r.studentId.toString();
+    const langId = (r.languageId as any)?._id ? (r.languageId as any)._id.toString() : (r.languageId?.toString() || 'lang');
+    const levelNumber = Number(r.levelNumber) || 1;
+    const key = `${langId}_${levelNumber}`;
+
+    if (!studentLevelsMap.has(sId)) {
+      studentLevelsMap.set(sId, new Map());
+    }
+    const userMap = studentLevelsMap.get(sId)!;
+    if (!userMap.has(key)) {
+      userMap.set(key, {
+        languageId: langId,
+        languageName: (r.languageId as any)?.name || 'General',
+        languageSlug: (r.languageId as any)?.slug || 'code',
+        levelNumber,
+        points: levelNumber * 2, // Level 1 = 2 pts, Level 2 = 4 pts, simultaneously increases 2 pts/level
+        obtainedMarks: r.obtainedMarks || 100,
+        percentage: r.percentage || 100,
+        passedAt: r.verifiedAt || (r as any).createdAt
+      });
+    }
+  }
+
+  // 2. Process from StudentProgress.completedLevels
+  for (const p of progressDocs) {
+    if (!p.studentId) continue;
+    const sId = p.studentId.toString();
+    const langId = (p.languageId as any)?._id ? (p.languageId as any)._id.toString() : (p.languageId?.toString() || 'lang');
+    const langName = (p.languageId as any)?.name || 'General';
+    const langSlug = (p.languageId as any)?.slug || 'code';
+
+    if (!studentLevelsMap.has(sId)) {
+      studentLevelsMap.set(sId, new Map());
+    }
+    const userMap = studentLevelsMap.get(sId)!;
+
+    for (const cl of (p.completedLevels || [])) {
+      const levelNumber = Number(cl.levelNumber) || 1;
+      const key = `${langId}_${levelNumber}`;
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          languageId: langId,
+          languageName: langName,
+          languageSlug: langSlug,
+          levelNumber,
+          points: levelNumber * 2, // Level 1 = 2 pts, Level 2 = 4 pts, etc.
+          obtainedMarks: cl.obtainedMarks || 100,
+          percentage: cl.percentage || 100,
+          passedAt: cl.passedAt || (p as any).updatedAt
+        });
+      }
+    }
+  }
+
+  // Build ranked students - initialize with all college departments
+  const departmentsSet = new Set<string>(ALL_COLLEGE_DEPARTMENTS);
+
+  const studentRankings = students.map((s: any) => {
+    const sId = s._id.toString();
+    const profile = profileMap.get(sId);
+    const userLevelsMap = studentLevelsMap.get(sId) || new Map();
+    const clearedLevels = Array.from(userLevelsMap.values()).sort((a, b) => a.levelNumber - b.levelNumber);
+
+    let totalPoints = 0;
+    let totalScore = 0;
+    let maxLevel = 0;
+    let latestPassDate: Date | null = null;
+
+    clearedLevels.forEach((lvl: any) => {
+      totalPoints += lvl.points;
+      totalScore += lvl.percentage;
+      if (lvl.levelNumber > maxLevel) maxLevel = lvl.levelNumber;
+      if (!latestPassDate || new Date(lvl.passedAt) > new Date(latestPassDate)) {
+        latestPassDate = lvl.passedAt;
+      }
+    });
+
+    const averageScore = clearedLevels.length > 0 ? Math.round(totalScore / clearedLevels.length) : 0;
+    let department = profile?.department || s.department || 'Computer Science and Engineering';
+    let year = Number(s.year || profile?.year || (profile?.semester ? Math.ceil(profile.semester / 2) : 1));
+
+    // Institutional categorization via college email
+    const emailInfo = parseCollegeEmail(s.email);
+    if (emailInfo.isValid) {
+      if (emailInfo.departmentName) department = emailInfo.departmentName;
+      if (emailInfo.year) year = emailInfo.year;
+    }
+
+    departmentsSet.add(department);
+
+    return {
+      studentId: s._id,
+      rollNumber: s.studentId || profile?.studentId || 'N/A',
+      name: `${s.firstName} ${s.lastName}`.trim(),
+      firstName: s.firstName,
+      lastName: s.lastName,
+      email: s.email,
+      department,
+      year,
+      section: s.section || 'A',
+      totalPoints,
+      levelsClearedCount: clearedLevels.length,
+      highestLevel: maxLevel,
+      averageScore,
+      clearedLevels,
+      lastPassedAt: latestPassDate
+    };
+  });
+
+  // Sort by totalPoints descending, averageScore descending, levelsClearedCount descending
+  studentRankings.sort((a, b) => {
+    if (b.totalPoints !== a.totalPoints) {
+      return b.totalPoints - a.totalPoints;
+    }
+    if (b.averageScore !== a.averageScore) {
+      return b.averageScore - a.averageScore;
+    }
+    if (b.levelsClearedCount !== a.levelsClearedCount) {
+      return b.levelsClearedCount - a.levelsClearedCount;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  // Assign overall rank
+  const rankedWithPositions = studentRankings.map((s, idx) => {
+    const rank = idx + 1;
+    let badge = `#${rank}`;
+    if (rank === 1 && s.totalPoints > 0) badge = '🥇 1st';
+    else if (rank === 2 && s.totalPoints > 0) badge = '🥈 2nd';
+    else if (rank === 3 && s.totalPoints > 0) badge = '🥉 3rd';
+
+    return {
+      ...s,
+      rank,
+      badge
+    };
+  });
+
+  return {
+    rankings: rankedWithPositions,
+    departments: Array.from(departmentsSet).sort(),
+    years: [1, 2, 3, 4]
+  };
+}
+
 export async function getAdminResults(req: AuthRequest, res: Response) {
   try {
-    const { level, languageId, passed } = req.query;
-    const query: any = {};
+    const { department, year, search, sortBy, level, languageId } = req.query;
 
-    if (level) query.levelNumber = parseInt(level as string, 10);
-    if (languageId) query.languageId = languageId;
-    if (passed !== undefined) query.passed = passed === 'true';
+    const { rankings, departments, years } = await getStudentRankingsData();
 
-    const results = await ExaminationResult.find(query)
-      .populate('studentId', 'firstName lastName email studentId')
-      .populate('examinationId', 'title levelNumber passingPercentage')
-      .populate('languageId', 'name slug')
-      .sort({ verifiedAt: -1 });
+    let filtered = [...rankings];
 
-    return res.json({ success: true, results });
+    // Filter by department
+    if (department && department !== 'all') {
+      filtered = filtered.filter((s) => s.department === department);
+    }
+
+    // Filter by year (1, 2, 3, 4)
+    if (year && year !== 'all') {
+      const yearNum = parseInt(year as string, 10);
+      filtered = filtered.filter((s) => s.year === yearNum);
+    }
+
+    // Search query
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filtered = filtered.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.rollNumber.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q) ||
+          s.department.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort using requested sortBy (Points, Year, Department, Name)
+    if (sortBy === 'points_desc') {
+      filtered.sort((a, b) => b.totalPoints - a.totalPoints || a.rank - b.rank);
+    } else if (sortBy === 'points_asc') {
+      filtered.sort((a, b) => a.totalPoints - b.totalPoints || a.name.localeCompare(b.name));
+    } else if (sortBy === 'year_asc') {
+      filtered.sort((a, b) => a.year - b.year || b.totalPoints - a.totalPoints);
+    } else if (sortBy === 'year_desc') {
+      filtered.sort((a, b) => b.year - a.year || b.totalPoints - a.totalPoints);
+    } else if (sortBy === 'department_asc') {
+      filtered.sort((a, b) => a.department.localeCompare(b.department) || b.totalPoints - a.totalPoints);
+    } else if (sortBy === 'name_asc') {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    // Summary calculations
+    const totalPointsAwarded = rankings.reduce((acc, s) => acc + s.totalPoints, 0);
+    const rankedStudentsCount = rankings.filter((s) => s.totalPoints > 0).length;
+    const topStudent = rankings.find((s) => s.totalPoints > 0) || rankings[0] || null;
+
+    // Backward-compatibility results array
+    const legacyResults = await ExaminationResult.find({ passed: true })
+      .populate('studentId', 'firstName lastName email studentId department')
+      .populate('examinationId', 'title levelNumber passingPercentage durationMinutes')
+      .populate('languageId', 'name slug executionEngineId')
+      .populate('sessionId', 'status startedAt finishedAt feedback')
+      .sort({ verifiedAt: -1 })
+      .lean();
+
+    return res.json({
+      success: true,
+      rankings: filtered,
+      allRankings: rankings,
+      summary: {
+        totalStudents: rankings.length,
+        rankedStudentsCount,
+        totalPointsAwarded,
+        topStudent
+      },
+      departments,
+      years,
+      results: legacyResults
+    });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Results error', error: error.message });
   }
 }
 
-export async function exportResultsCsv(_req: AuthRequest, res: Response) {
+export async function exportResultsCsv(req: AuthRequest, res: Response) {
   try {
-    const results = await ExaminationResult.find()
-      .populate('studentId', 'firstName lastName email studentId')
-      .populate('examinationId', 'title levelNumber')
-      .populate('languageId', 'name')
-      .sort({ verifiedAt: -1 });
+    const { department, year, sortBy, search } = req.query;
+    const { rankings } = await getStudentRankingsData();
 
-    let csv = 'StudentEmail,StudentName,StudentID,Language,Level,MarksObtained,TotalMarks,Percentage,Verdict,VerifiedAt\n';
-    results.forEach((r: any) => {
-      const student = r.studentId;
-      csv += `"${student?.email || ''}","${student?.firstName || ''} ${student?.lastName || ''}","${student?.studentId || ''}","${r.languageId?.name || ''}","${r.levelNumber}","${r.obtainedMarks}","${r.totalMarks}","${r.percentage}%","${r.passed ? 'PASSED' : 'FAILED'}","${new Date(r.verifiedAt).toISOString()}"\n`;
+    let exportList = [...rankings];
+    if (department && department !== 'all') {
+      exportList = exportList.filter((s) => s.department === department);
+    }
+    if (year && year !== 'all') {
+      const yearNum = parseInt(year as string, 10);
+      exportList = exportList.filter((s) => s.year === yearNum);
+    }
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim().toLowerCase();
+      exportList = exportList.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.rollNumber.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q) ||
+          s.department.toLowerCase().includes(q)
+      );
+    }
+
+    // Apply sorting
+    if (sortBy === 'points_asc') {
+      exportList.sort((a, b) => a.totalPoints - b.totalPoints);
+    } else if (sortBy === 'year_asc') {
+      exportList.sort((a, b) => a.year - b.year || b.totalPoints - a.totalPoints);
+    } else if (sortBy === 'year_desc') {
+      exportList.sort((a, b) => b.year - a.year || b.totalPoints - a.totalPoints);
+    } else if (sortBy === 'department_asc') {
+      exportList.sort((a, b) => a.department.localeCompare(b.department) || b.totalPoints - a.totalPoints);
+    } else if (sortBy === 'name_asc') {
+      exportList.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      // Default: points_desc
+      exportList.sort((a, b) => b.totalPoints - a.totalPoints || b.averageScore - a.averageScore);
+    }
+
+    let csv = 'Rank,RollNumber,CandidateName,Email,Department,Year,TotalPoints,LevelsClearedCount,ClearedLevelsSummary,AverageScore\n';
+    exportList.forEach((s, idx) => {
+      const rankNum = idx + 1;
+      const clearedSummary = (s.clearedLevels || [])
+        .map((cl: any) => `${cl.languageName} L${cl.levelNumber} (${cl.points} pts)`)
+        .join(' | ');
+      csv += `"${rankNum}","${s.rollNumber}","${s.name}","${s.email}","${s.department}","Year ${s.year}","${s.totalPoints}","${s.levelsClearedCount}","${clearedSummary}","${s.averageScore}%"\n`;
     });
 
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="examination_results_export.csv"');
-    return res.send(csv);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="student_academic_rankings.csv"');
+    return res.status(200).send(csv);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'CSV export error', error: error.message });
   }
@@ -1117,11 +1521,17 @@ export async function getAttendanceByTiming(req: AuthRequest, res: Response) {
     const pendingCount = filtered.filter((r) => !r.attendanceStatus || r.attendanceStatus === 'pending').length;
 
     // Distinct time windows from active slots
-    const allSlots = await ExaminationSlot.find({ isActive: true }).select('timeWindow labName registeredCount');
+    const allSlots = await ExaminationSlot.find({ isActive: true }).select('timeWindow labName registeredCount startTime endTime');
     const timeWindowSet = new Set<string>();
+    const timeWindowDateMap: Record<string, string> = {};
     const labSet = new Set<string>();
     allSlots.forEach((s) => {
-      if (s.timeWindow) timeWindowSet.add(s.timeWindow);
+      if (s.timeWindow) {
+        timeWindowSet.add(s.timeWindow);
+        if (s.startTime && !timeWindowDateMap[s.timeWindow]) {
+          timeWindowDateMap[s.timeWindow] = s.startTime.toISOString();
+        }
+      }
       if (s.labName) labSet.add(s.labName);
     });
 
@@ -1168,6 +1578,7 @@ export async function getAttendanceByTiming(req: AuthRequest, res: Response) {
     return res.json({
       success: true,
       timeWindows: standardTimeWindows,
+      timeWindowDates: timeWindowDateMap,
       labs: ['Lab 1', 'Lab 2', 'Lab 3'],
       summary: {
         totalRegistered,

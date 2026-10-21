@@ -59,5 +59,9 @@ const QuestionSchema = new Schema<IQuestion>(
   { timestamps: true }
 );
 
+// High performance compound indexes for fast assessment shuffling and space management
+QuestionSchema.index({ languageId: 1, targetLevel: 1, isArchived: 1, isDraft: 1 });
+QuestionSchema.index({ allowedLanguages: 1, targetLevel: 1, isArchived: 1, isDraft: 1 });
+
 export const Question = mongoose.model<IQuestion>('Question', QuestionSchema);
 

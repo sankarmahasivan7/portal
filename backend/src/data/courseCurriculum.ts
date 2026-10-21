@@ -8,12 +8,21 @@ export interface CourseVideo {
   topics: string[];
 }
 
+export interface SampleMCQ {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex: number; // 0: A, 1: B, 2: C, 3: D
+  explanation: string;
+}
+
 export interface LevelCurriculum {
   title: string;
   description: string;
   topics: string[];
   videos: CourseVideo[];
   studyNotes: string[];
+  sampleMcqs?: SampleMCQ[];
 }
 
 export const COURSE_CURRICULUM_DATA: Record<string, Record<number, LevelCurriculum>> = {
@@ -558,41 +567,257 @@ export const COURSE_CURRICULUM_DATA: Record<string, Record<number, LevelCurricul
 };
 
 /**
- * Returns curriculum, videos, topics, and notes for a given language slug and level number.
+ * Returns 5 tailored, concept-clarifying Multiple Choice Questions (MCQs) for any language and level.
+ */
+export function getLevelSampleMcqs(languageSlug: string, levelNumber: number, languageName: string): SampleMCQ[] {
+  const slug = languageSlug.toLowerCase();
+
+  if (slug === 'c' && levelNumber === 1) {
+    return [
+      {
+        id: 'c-l1-mcq1',
+        question: 'Which phase of the GCC compilation pipeline expands macros (#define) and processes header inclusions (#include)?',
+        options: ['Preprocessor (cpp)', 'Compiler (cc1)', 'Assembler (as)', 'Linker (ld)'],
+        correctIndex: 0,
+        explanation: 'The C preprocessor handles all `#` directives such as `#include`, `#define`, and conditional compilation `#ifdef` before compilation begins.'
+      },
+      {
+        id: 'c-l1-mcq2',
+        question: 'When reading a character with scanf("%c", &ch) immediately following an integer read scanf("%d", &n), why is the character input frequently skipped?',
+        options: [
+          '%c only accepts uppercase alphabetical characters',
+          'The trailing newline character \'\\n\' from pressing Enter is read immediately by %c',
+          'Operating system standard I/O buffer overflow',
+          'scanf does not allocate memory for character pointers'
+        ],
+        correctIndex: 1,
+        explanation: 'After entering an integer, the Enter key leaves a newline character (\'\\n\') in the standard input stream. Using " %c" with a leading space instructs scanf to discard any leading whitespace and newlines.'
+      },
+      {
+        id: 'c-l1-mcq3',
+        question: 'What will be the value of y after executing:\nint x = 0, y = 10;\nif (x != 0 && ++y > 10) { /* block */ }',
+        options: ['11', '10', '0', 'Undefined behavior due to sequence point'],
+        correctIndex: 1,
+        explanation: 'Because `x != 0` evaluates to false (0), C logical AND (&&) performs short-circuit evaluation. The second operand `++y > 10` is not evaluated, leaving y unchanged at 10.'
+      },
+      {
+        id: 'c-l1-mcq4',
+        question: 'What is the evaluated result of the expression: 5 / 2 * 2.0 in C?',
+        options: ['5.0', '4.0', '2.5', '4'],
+        correctIndex: 1,
+        explanation: 'Due to left-to-right operator precedence, integer division `5 / 2` evaluates first to `2`. Then `2 * 2.0` promotes to floating-point multiplication resulting in `4.0`.'
+      },
+      {
+        id: 'c-l1-mcq5',
+        question: 'What occurs if a matching case in a C switch statement does not conclude with a break statement?',
+        options: [
+          'The program terminates immediately with a segmentation fault',
+          'Execution falls through sequentially into subsequent case blocks',
+          'Compilation fails with a syntax error',
+          'The switch statement repeats in an infinite loop'
+        ],
+        correctIndex: 1,
+        explanation: 'Without a break statement, C control flow continues sequentially executing the instructions in all subsequent case branches until a break or the closing brace `}` is encountered (known as fallthrough).'
+      }
+    ];
+  }
+
+  if (slug === 'c' && levelNumber === 2) {
+    return [
+      {
+        id: 'c-l2-mcq1',
+        question: 'Given an array declared as int arr[5]; in C, what occurs when executing arr[5] = 100;?',
+        options: [
+          'It initializes a 6th element dynamically',
+          'Undefined behavior due to an out-of-bounds array access',
+          'A compilation error: IndexOutOfBoundsException',
+          'The memory allocator shifts the array pointer'
+        ],
+        correctIndex: 1,
+        explanation: 'C arrays are 0-indexed with valid indices from 0 to 4 for size 5. Accessing `arr[5]` writes beyond the allocated array bounds, triggering undefined behavior.'
+      },
+      {
+        id: 'c-l2-mcq2',
+        question: 'How does the standard library function strlen(str) determine the length of a string in C?',
+        options: [
+          'It reads a 4-byte length prefix stored before the string array',
+          'It counts characters sequentially until it encounters the null terminator \'\\0\'',
+          'It calls the operating system kernel for heap segment size',
+          'It divides sizeof(str) by sizeof(char)'
+        ],
+        correctIndex: 1,
+        explanation: 'C strings are null-terminated character arrays. `strlen` increments a counter until finding the terminating \'\\0\', returning the character count excluding the null terminator.'
+      },
+      {
+        id: 'c-l2-mcq3',
+        question: 'Which loop construct in C is guaranteed to execute its loop body at least once?',
+        options: ['for loop', 'while loop', 'do-while loop', 'nested loop'],
+        correctIndex: 2,
+        explanation: 'A `do-while` loop tests its conditional expression at the end of the loop, ensuring the loop body executes at least once prior to evaluation.'
+      },
+      {
+        id: 'c-l2-mcq4',
+        question: 'In a 2D array declared as int matrix[3][4] in C, how are elements stored in physical memory?',
+        options: ['Row-major order', 'Column-major order', 'Diagonal-major order', 'Scattered linked blocks'],
+        correctIndex: 0,
+        explanation: 'C multi-dimensional arrays are stored contiguously in row-major order: all elements of row 0 are contiguous, followed by row 1, then row 2.'
+      },
+      {
+        id: 'c-l2-mcq5',
+        question: 'What is the worst-case time complexity of Linear Search on an unsorted array of size N?',
+        options: ['O(1)', 'O(log N)', 'O(N)', 'O(N^2)'],
+        correctIndex: 2,
+        explanation: 'In the worst case (the target element is at the very end or absent), Linear Search must inspect every single one of the N elements sequentially, taking O(N) time.'
+      }
+    ];
+  }
+
+  if (slug === 'python') {
+    return [
+      {
+        id: 'py-mcq1',
+        question: 'Which of the following built-in data types in Python is mutable?',
+        options: ['tuple', 'string', 'list', 'frozenset'],
+        correctIndex: 2,
+        explanation: 'In Python, `list`, `dict`, and `set` are mutable (can be changed in-place), whereas `tuple`, `str`, `int`, and `frozenset` are immutable.'
+      },
+      {
+        id: 'py-mcq2',
+        question: 'Given s = "PYTHON", what is the value of s[1:4]?',
+        options: ['"YTH"', '"PYT"', '"YTHO"', '"THO"'],
+        correctIndex: 0,
+        explanation: 'Python slicing `s[start:stop]` includes the start index (1 -> \'Y\') up to, but excluding, the stop index (4 -> excludes \'O\'), resulting in "YTH".'
+      },
+      {
+        id: 'py-mcq3',
+        question: 'What is the average time complexity of looking up a key in a Python dictionary?',
+        options: ['O(N)', 'O(log N)', 'O(1)', 'O(N log N)'],
+        correctIndex: 2,
+        explanation: 'Python dictionaries are implemented as hash tables, delivering amortized O(1) time complexity for key lookups, insertions, and deletions.'
+      },
+      {
+        id: 'py-mcq4',
+        question: 'What is the difference between `==` and `is` in Python?',
+        options: [
+          '`==` checks identity, `is` checks value equality',
+          '`==` checks value equality, `is` checks object identity (same memory address)',
+          'They are completely interchangeable aliases',
+          '`is` is only valid for boolean expressions'
+        ],
+        correctIndex: 1,
+        explanation: '`==` compares whether the values of two objects are equal, while `is` evaluates whether both references point to the exact same object in memory (`id(a) == id(b)`).'
+      },
+      {
+        id: 'py-mcq5',
+        question: 'What integers are generated by list(range(2, 8, 2))?',
+        options: ['[2, 4, 6, 8]', '[2, 4, 6]', '[2, 5, 8]', '[4, 6, 8]'],
+        correctIndex: 1,
+        explanation: '`range(start, stop, step)` starts at 2 and steps by 2 while strictly less than 8, yielding [2, 4, 6].'
+      }
+    ];
+  }
+
+  // Universal high-yield fallback generator for any course and level
+  return [
+    {
+      id: `${slug}-l${levelNumber}-mcq1`,
+      question: `In ${languageName} Level ${levelNumber}, what is the fundamental advantage of utilizing structured modular functions over monolithic blocks?`,
+      options: [
+        'Increases compiler optimization speed and reduces byte code size',
+        'Enhances code reusability, modularity, and facilitates isolated unit testing',
+        'Eliminates the requirement for local variable declarations',
+        'Guarantees constant-time O(1) execution'
+      ],
+      correctIndex: 1,
+      explanation: 'Dividing complex algorithmic logic into modular functions isolates scope, prevents side-effects, improves readability, and makes testing individual components straightforward.'
+    },
+    {
+      id: `${slug}-l${levelNumber}-mcq2`,
+      question: `When validating boundary inputs in ${languageName} assessments, why is handling empty inputs or zero values critical?`,
+      options: [
+        'Automated grading test-suites specifically include edge cases like 0, negative values, and empty data',
+        'Compilers automatically abort execution if 0 is passed to any function',
+        'Zero inputs always cause arithmetic overflow errors',
+        'Memory segments cannot represent zero values'
+      ],
+      correctIndex: 0,
+      explanation: 'Assessment test-suites evaluate boundary cases such as N=0, empty strings, and negative values to verify defensive programming and avoid division by zero or segmentation faults.'
+    },
+    {
+      id: `${slug}-l${levelNumber}-mcq3`,
+      question: `What is the expected time complexity when an algorithm utilizes two nested loops iterating from 1 to N?`,
+      options: ['O(N)', 'O(N log N)', 'O(N^2)', 'O(2^N)'],
+      correctIndex: 2,
+      explanation: 'Two nested loops where each runs proportional to N perform approximately N * N operations, resulting in a quadratic time complexity of O(N^2).'
+    },
+    {
+      id: `${slug}-l${levelNumber}-mcq4`,
+      question: `Why is it essential to check return codes or EOF (End Of File) conditions during standard input processing in ${languageName}?`,
+      options: [
+        'To prevent infinite loops when the automated test runner passes piped input streams',
+        'Input functions will delete source code files if EOF is reached',
+        'Operating systems require EOF checks to grant file system permissions',
+        'It increases processor clock speeds'
+      ],
+      correctIndex: 0,
+      explanation: 'Automated test runners deliver inputs via redirected pipes or files. Checking for EOF prevents reading invalid data or falling into infinite read loops upon stream termination.'
+    },
+    {
+      id: `${slug}-l${levelNumber}-mcq5`,
+      question: `What distinguishes iterative algorithms from recursive algorithms in terms of runtime resource consumption?`,
+      options: [
+        'Recursion never consumes stack memory',
+        'Recursive calls push frames onto the call stack, risking stack overflow for deep recursion, whereas iteration uses fixed memory',
+        'Iteration cannot solve problems that recursion can solve',
+        'Recursive functions are automatically converted to multithreaded processes'
+      ],
+      correctIndex: 1,
+      explanation: 'Each recursive call allocates a new stack frame for local variables and return addresses. Deep recursion can exceed the stack limit and cause a stack overflow error, whereas iteration executes with O(1) auxiliary stack space.'
+    }
+  ];
+}
+
+/**
+ * Returns curriculum, videos, topics, notes, and 5 sample MCQs for a given language slug and level number.
  * Falls back to structured standard programming curriculum if not custom defined.
  */
 export function getLevelCurriculum(languageSlug: string, levelNumber: number, languageName: string): LevelCurriculum {
   const normalizedSlug = languageSlug.toLowerCase();
+  let result: LevelCurriculum;
+
   if (COURSE_CURRICULUM_DATA[normalizedSlug] && COURSE_CURRICULUM_DATA[normalizedSlug][levelNumber]) {
-    return COURSE_CURRICULUM_DATA[normalizedSlug][levelNumber];
+    result = { ...COURSE_CURRICULUM_DATA[normalizedSlug][levelNumber] };
+  } else {
+    result = {
+      title: `${languageName} - Level ${levelNumber}: Intermediate & Advanced Programming`,
+      description: `Comprehensive evaluation of ${languageName} concepts for Level ${levelNumber}, focusing on problem solving, performance, and best practices.`,
+      topics: [
+        `${languageName} Level ${levelNumber} Core Constructs`,
+        'Memory Management & Efficient Data Representation',
+        'Algorithmic Complexity & Optimization Techniques',
+        'Standard Library Built-in Utilities',
+        'Defensive Programming & Edge-Case Handling'
+      ],
+      studyNotes: [
+        `Review ${languageName} documentation for Level ${levelNumber} topics before starting the assessment.`,
+        'Ensure your code handles empty inputs, negative numbers, and large scale boundary values.',
+        'Check time limits and memory limits specified for each question.'
+      ],
+      videos: [
+        {
+          id: `${normalizedSlug}-l${levelNumber}-v1`,
+          title: `Lecture 1: ${languageName} Level ${levelNumber} Masterclass`,
+          duration: '25:00',
+          url: 'https://www.youtube-nocookie.com/embed/KJgsSFOSQv0',
+          thumbnail: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80',
+          description: `In-depth theoretical and practical concepts required to clear the ${languageName} Level ${levelNumber} assessment.`,
+          topics: ['Advanced concepts', 'Code architecture', 'Algorithm design']
+        }
+      ]
+    };
   }
 
-  // Fallback dynamic generator for higher levels or other languages
-  return {
-    title: `${languageName} - Level ${levelNumber}: Intermediate & Advanced Programming`,
-    description: `Comprehensive evaluation of ${languageName} concepts for Level ${levelNumber}, focusing on problem solving, performance, and best practices.`,
-    topics: [
-      `${languageName} Level ${levelNumber} Core Constructs`,
-      'Memory Management & Efficient Data Representation',
-      'Algorithmic Complexity & Optimization Techniques',
-      'Standard Library Built-in Utilities',
-      'Defensive Programming & Edge-Case Handling'
-    ],
-    studyNotes: [
-      `Review ${languageName} documentation for Level ${levelNumber} topics before starting the assessment.`,
-      'Ensure your code handles empty inputs, negative numbers, and large scale boundary values.',
-      'Check time limits and memory limits specified for each question.'
-    ],
-    videos: [
-      {
-        id: `${normalizedSlug}-l${levelNumber}-v1`,
-        title: `Lecture 1: ${languageName} Level ${levelNumber} Masterclass`,
-        duration: '25:00',
-        url: 'https://www.youtube-nocookie.com/embed/KJgsSFOSQv0',
-        thumbnail: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80',
-        description: `In-depth theoretical and practical concepts required to clear the ${languageName} Level ${levelNumber} assessment.`,
-        topics: ['Advanced concepts', 'Code architecture', 'Algorithm design']
-      }
-    ]
-  };
+  // Always supply 5 sample understanding MCQs for this level
+  result.sampleMcqs = getLevelSampleMcqs(normalizedSlug, levelNumber, languageName);
+  return result;
 }

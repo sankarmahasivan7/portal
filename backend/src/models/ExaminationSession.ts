@@ -31,6 +31,7 @@ export interface IExaminationSession extends Document {
   userAgent?: string;
   sebVerified: boolean;
   attemptNumber: number;
+  assignedQuestions?: mongoose.Types.ObjectId[];
   feedback?: IExaminationFeedback;
   createdAt: Date;
   updatedAt: Date;
@@ -63,6 +64,7 @@ const ExaminationSessionSchema = new Schema<IExaminationSession>(
     userAgent: { type: String },
     sebVerified: { type: Boolean, default: false },
     attemptNumber: { type: Number, default: 1 },
+    assignedQuestions: [{ type: Schema.Types.ObjectId, ref: 'Question' }],
     feedback: {
       rating: { type: Number, min: 1, max: 5 },
       difficulty: { type: String, enum: ['easy', 'moderate', 'hard', 'very_hard'] },

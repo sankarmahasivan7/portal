@@ -15,6 +15,7 @@ import { LevelDetailPage } from './pages/student/LevelDetailPage';
 import { ExamArena } from './pages/student/ExamArena';
 import { ExamFeedbackVerification } from './pages/student/ExamFeedbackVerification';
 import { ExamResultView } from './pages/student/ExamResultView';
+import { SlotHistory } from './pages/student/SlotHistory';
 
 // Admin Pages
 import { AdminDashboard } from './pages/admin/AdminDashboard';
@@ -52,7 +53,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> 
             ? '/student/total-courses'
             : user.role === 'faculty'
             ? '/admin/exams'
-            : '/admin/overview'
+            : '/admin/languages'
         }
         replace
       />
@@ -111,6 +112,14 @@ export const App: React.FC = () => {
               }
             />
             <Route
+              path="/student/slot-history"
+              element={
+                <ProtectedRoute roles={['student']}>
+                  <SlotHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/student/course/:languageId/level/:levelNumber"
               element={
                 <ProtectedRoute roles={['student']}>
@@ -147,26 +156,11 @@ export const App: React.FC = () => {
             />
 
             {/* Admin / Faculty Routes */}
-            <Route
-              path="/admin/overview"
-              element={
-                <ProtectedRoute roles={['admin', 'controller']}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/students"
-              element={
-                <ProtectedRoute roles={['admin', 'controller']}>
-                  <StudentManagement />
-                </ProtectedRoute>
-              }
-            />
+            {/* Admin Core Pages: Courses, Questions, Results */}
             <Route
               path="/admin/languages"
               element={
-                <ProtectedRoute roles={['admin']}>
+                <ProtectedRoute roles={['admin', 'controller']}>
                   <LanguageManagement />
                 </ProtectedRoute>
               }
@@ -174,24 +168,8 @@ export const App: React.FC = () => {
             <Route
               path="/admin/questions"
               element={
-                <ProtectedRoute roles={['admin']}>
+                <ProtectedRoute roles={['admin', 'controller']}>
                   <QuestionBank />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/exams"
-              element={
-                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
-                  <ExamManagement />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/attendance"
-              element={
-                <ProtectedRoute roles={['admin', 'faculty', 'controller']}>
-                  <AttendanceManagement />
                 </ProtectedRoute>
               }
             />
@@ -203,14 +181,31 @@ export const App: React.FC = () => {
                 </ProtectedRoute>
               }
             />
+
+            {/* Faculty Dedicated Pages: Exams & Attendance Gate */}
             <Route
-              path="/admin/security"
+              path="/admin/exams"
               element={
-                <ProtectedRoute roles={['admin']}>
-                  <SecurityAudit />
+                <ProtectedRoute roles={['faculty', 'admin', 'controller']}>
+                  <ExamManagement />
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/attendance"
+              element={
+                <ProtectedRoute roles={['faculty', 'admin', 'controller']}>
+                  <AttendanceManagement />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Redirects for removed admin pages */}
+            <Route path="/admin/overview" element={<Navigate to="/admin/languages" replace />} />
+            <Route path="/admin/students" element={<Navigate to="/admin/languages" replace />} />
+            <Route path="/admin/security" element={<Navigate to="/admin/languages" replace />} />
+            <Route path="/admin/audit-logs" element={<Navigate to="/admin/languages" replace />} />
+            <Route path="/admin" element={<Navigate to="/admin/languages" replace />} />
 
             {/* Default Fallback */}
             <Route path="*" element={<Navigate to="/login" replace />} />

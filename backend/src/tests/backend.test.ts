@@ -9,6 +9,8 @@ import { ExaminationRegistration } from '../models/ExaminationRegistration';
 import { ExaminationSession } from '../models/ExaminationSession';
 import { SubmissionOtp } from '../models/SubmissionOtp';
 import { StudentProgress } from '../models/StudentProgress';
+import { Question } from '../models/Question';
+import { TestCase } from '../models/TestCase';
 import { ProgressionService } from '../services/ProgressionService';
 import { runSeed } from '../scripts/seed';
 
@@ -195,11 +197,12 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
     });
 
     test('Filled slot (30/30) is rejected and not returned in real-time available slots', async () => {
-      // Find the completely filled slot from seed (registeredCount = 30)
-      const filledSlot = await ExaminationSlot.findOne({
-        examinationId: cExamLevel1Id,
-        registeredCount: { $gte: 30 }
-      });
+      // Dynamically set one slot to filled (30/30) to test rejection and real-time hiding
+      const filledSlot = await ExaminationSlot.findOneAndUpdate(
+        { examinationId: cExamLevel1Id },
+        { registeredCount: 30 },
+        { new: true }
+      );
       expect(filledSlot).toBeDefined();
 
       // Student 2 (not yet registered) tries to register for this filled slot
@@ -651,4 +654,109 @@ describe('College Programming Assessment Portal - Backend Test Suite', () => {
       expect(updatedSession!.feedback!.verifiedOtp).toBe(freshOtp);
     });
   });
+
+  describe('6. Student Slot Booking History & Previous Marks', () => {
+    it('GET /api/student/slot-history returns comprehensive booking history, slot timing, and previous marks', async () => {
+      const res = await request(app)
+        .get('/api/student/slot-history')
+        .set('Authorization', `Bearer ${student1Token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.summary).toBeDefined();
+      expect(res.body.summary.totalBookings).toBeGreaterThanOrEqual(1);
+      expect(Array.isArray(res.body.slotHistory)).toBe(true);
+      expect(res.body.slotHistory.length).toBeGreaterThanOrEqual(1);
+
+      // Verify each slot booking entry has required fields
+      for (const item of res.body.slotHistory) {
+        expect(item.registrationId).toBeDefined();
+        expect(item.languageName).toBeDefined();
+        expect(item.levelNumber).toBeDefined();
+        expect(item.slotTiming).toBeDefined();
+        expect(item.labName).toBeDefined();
+        expect(item.attendanceStatus).toBeDefined();
+        expect(item.previousMarks).toBeDefined();
+        expect(item.previousMarks.totalMarks).toBe(100);
+      }
+
+      // Verify that student1's completed C Level 1 assessment has valid marks recorded
+      const completedBooking = res.body.slotHistory.find(
+        (h: any) => h.levelNumber === 1 && h.previousMarks?.hasResult === true
+      );
+      expect(completedBooking).toBeDefined();
+      expect(completedBooking.previousMarks.obtainedMarks).toBeGreaterThanOrEqual(70);
+      expect(completedBooking.previousMarks.passed).toBe(true);
+      expect(completedBooking.slotTiming).toBeTruthy();
+      expect(completedBooking.labName).toBeTruthy();
+    });
+  });
+
+  describe('7. Course-Level Question Pool (At least 10 Questions Per Course Per Level) & Shuffling', () => {
+    test('Total question pool contains at least 280 questions and over 800 test cases', async () => {
+      const totalQuestions = await Question.countDocuments({ isArchived: false });
+      expect(totalQuestions).toBeGreaterThanOrEqual(280);
+
+      const totalTestCases = await TestCase.countDocuments({});
+      expect(totalTestCases).toBeGreaterThanOrEqual(800);
+    });
+
+    test('Every level in C, C++, Java, and Python has at least 10 questions (Levels 1 to 6)', async () => {
+      const courses = ['c', 'cpp', 'java', 'python'];
+      for (const slug of courses) {
+        const lang = await ProgrammingLanguage.findOne({ slug });
+        expect(lang).toBeDefined();
+
+        for (let level = 1; level <= 6; level++) {
+          const count = await Question.countDocuments({
+            languageId: lang!._id,
+            targetLevel: level,
+            isArchived: false
+          });
+          expect(count).toBeGreaterThanOrEqual(10);
+        }
+      }
+    });
+
+    test('Every level in JavaScript has at least 10 questions (Levels 1 to 4)', async () => {
+      const jsLang = await ProgrammingLanguage.findOne({ slug: 'javascript' });
+      expect(jsLang).toBeDefined();
+
+      for (let level = 1; level <= 4; level++) {
+        const count = await Question.countDocuments({
+          languageId: jsLang!._id,
+          targetLevel: level,
+          isArchived: false
+        });
+        expect(count).toBeGreaterThanOrEqual(10);
+      }
+    });
+
+    test('Every question has both public and hidden test cases with input and expected output', async () => {
+      const sampleQuestions = await Question.find({ isArchived: false }).limit(20);
+      for (const q of sampleQuestions) {
+        const publicCases = await TestCase.countDocuments({ questionId: q._id, isHidden: false });
+        const hiddenCases = await TestCase.countDocuments({ questionId: q._id, isHidden: true });
+
+        expect(publicCases).toBeGreaterThanOrEqual(1);
+        expect(hiddenCases).toBeGreaterThanOrEqual(1);
+      }
+    });
+
+    test('Admin Question Bank API lists questions filtered by language and level', async () => {
+      const cLang = await ProgrammingLanguage.findOne({ slug: 'c' });
+      const res = await request(app)
+        .get(`/api/admin/questions?languageId=${cLang!._id}&targetLevel=1`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.questions.length).toBeGreaterThanOrEqual(10);
+      for (const q of res.body.questions) {
+        expect(q.targetLevel).toBe(1);
+      }
+    });
+  });
 });
+
+

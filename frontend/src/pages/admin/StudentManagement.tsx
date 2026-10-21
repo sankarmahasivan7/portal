@@ -121,8 +121,22 @@ export const StudentManagement: React.FC = () => {
     }
   };
 
-  const handleExportCsv = () => {
-    window.open('/api/admin/students/export-csv', '_blank');
+  const handleExportCsv = async () => {
+    try {
+      const response = await api.get('/admin/students/export-csv', { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `students_directory_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Export failed:', err);
+      alert('Failed to export students CSV.');
+    }
   };
 
   return (
